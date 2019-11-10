@@ -1,4 +1,4 @@
-module sqlxx
+module github.com/rema424/sqlxx
 
 go 1.13
 
