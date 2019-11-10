@@ -1,2 +1,130 @@
 # sqlxx
+
 jmoiron/sqlx を拡張してトランザクション管理をアプリケーションコアから切り離せるようにしたライブラリ
+
+## usage
+
+```go
+package main
+
+import (
+	"context"
+	"log"
+
+	_ "github.com/go-sql-driver/mysql"
+	"github.com/jmoiron/sqlx"
+	"github.com/k0kubun/pp"
+	"github.com/rema424/sqlxx"
+)
+
+var schema1 = `
+create table if not exists person (
+  id bigint auto_increment,
+  name varchar(255),
+  primary key (id)
+);`
+
+var schema2 = `
+create table if not exists favorite_food (
+  id bigint auto_increment,
+  user_id bigint,
+  name varchar(255),
+  primary key (id),
+  unique (user_id, name),
+  foreign key (user_id) references person (id) on update cascade on delete set null
+);`
+
+// Person .
+type Person struct {
+	ID    int64  `db:"qwerty"`
+	Name  string `db:"asdfgh"`
+	Foods []Food
+}
+
+// Food .
+type Food struct {
+	ID     int64  `db:"zxcvbn"`
+	UserID int64  `db:"uiopjkl"`
+	Name   string `db:"yhnujm"`
+}
+
+func main() {
+	db, err := sqlx.Connect("mysql", os.Getenv("DSN"))
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	db.MustExec(schema1)
+	db.MustExec(schema2)
+
+	accssr, err := sqlxx.Open(db)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	ctx := context.Background()
+	f1 := Food{Name: "apple"}
+	f2 := Food{Name: "banana"} // replace banana to apple, foreign key constraint error happen and rollback
+	p := Person{Name: "Alice", Foods: []Food{f1, f2}}
+
+	var txFn sqlxx.TxFunc = func(ctx context.Context) (interface{}, error) {
+		q1 := `insert into person (name) values (:asdfgh);`
+		res, err := accssr.NamedExec(ctx, q1, p)
+		if err != nil {
+			return nil, err // if err returned, rollback
+		}
+
+		pid, err := res.LastInsertId()
+		if err != nil {
+			return nil, err // if err returned, rollback
+    }
+		p.ID = pid
+
+		q2 := `insert into favorite_food (user_id, name) values (:uiopjkl, :yhnujm);`
+		for i := range p.Foods {
+      p.Foods[i].UserID = pid
+
+			res, err := accssr.NamedExec(ctx, q2, p.Foods[i])
+			if err != nil {
+				return nil, err // if err returned, rollback
+      }
+
+      fid, err := res.LastInsertId()
+			if err != nil {
+				return nil, err // if err returned, rollback
+      }
+			p.Foods[i].ID = fid
+		}
+
+		return p, nil // if err not returned, commit
+	}
+
+	v, err, rlbkErr := accssr.RunInTx(ctx, txFn)
+	if rlbkErr != nil {
+		// alert (email, slack, etc.)
+		log.Println("rollback error occurred - err:", rlbkErr.Error())
+	}
+
+	if err != nil {
+		log.Println("sql error occurred - err:", err.Error())
+	} else {
+		pp.Println(v.(Person))
+		// main.Person{
+		//   ID:    1,
+		//   Name:  "Alice",
+		//   Foods: []main.Food{
+		//     main.Food{
+		//       ID:     1,
+		//       UserID: 1,
+		//       Name:   "apple",
+		//     },
+		//     main.Food{
+		//       ID:     2,
+		//       UserID: 1,
+		//       Name:   "banana",
+		//     },
+		//   },
+		// }
+	}
+}
+```
