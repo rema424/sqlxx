@@ -10,6 +10,7 @@ package main
 import (
 	"context"
 	"log"
+	"os"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
@@ -77,22 +78,22 @@ func main() {
 		pid, err := res.LastInsertId()
 		if err != nil {
 			return nil, err // if err returned, rollback
-    }
+		}
 		p.ID = pid
 
 		q2 := `insert into favorite_food (user_id, name) values (:uiopjkl, :yhnujm);`
 		for i := range p.Foods {
-      p.Foods[i].UserID = pid
+			p.Foods[i].UserID = pid
 
 			res, err := accssr.NamedExec(ctx, q2, p.Foods[i])
 			if err != nil {
 				return nil, err // if err returned, rollback
-      }
+			}
 
-      fid, err := res.LastInsertId()
+			fid, err := res.LastInsertId()
 			if err != nil {
 				return nil, err // if err returned, rollback
-      }
+			}
 			p.Foods[i].ID = fid
 		}
 
