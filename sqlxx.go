@@ -28,7 +28,7 @@ type Queryer interface {
 	Query(query string, args ...interface{}) (*sql.Rows, error)
 }
 
-func Connect(db *sqlx.DB) *DB {
+func New(db *sqlx.DB) *DB {
 	if err := db.Ping(); err != nil {
 		log.Fatalln(err)
 	}

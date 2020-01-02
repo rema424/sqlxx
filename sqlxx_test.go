@@ -16,13 +16,13 @@ var (
 
 func TestMain(m *testing.M) {
 	/*
-	  $ mysql.server start
-	  $ mysql -uroot -e 'create database if not exists sqlxxtest;'
-	  $ mysql -uroot -e 'create user if not exists sqlxxtester@localhost identified by "Passw0rd!";'
-	  $ mysql -uroot -e 'grant all privileges on sqlxxtest.* to sqlxxtester@localhost;'
-	  $ mysql -uroot -e 'show databases;'
-	  $ mysql -uroot -e 'select host, user from mysql.user;'
-	  $ mysql -uroot -e 'show grants for sqlxxtester@localhost;'
+	  mysql.server start
+	  mysql -uroot -e 'create database if not exists sqlxxtest;'
+	  mysql -uroot -e 'create user if not exists sqlxxtester@localhost identified by "Passw0rd!";'
+	  mysql -uroot -e 'grant all privileges on sqlxxtest.* to sqlxxtester@localhost;'
+	  mysql -uroot -e 'show databases;'
+	  mysql -uroot -e 'select host, user from mysql.user;'
+	  mysql -uroot -e 'show grants for sqlxxtester@localhost;'
 	*/
 
 	var err error
@@ -37,7 +37,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestConnect(t *testing.T) {
-	db := Connect(dbx)
+	db := New(dbx)
 	if err := db.Ping(); err != nil {
 		t.Fatalf("failed to Connect: %v", err)
 	}
