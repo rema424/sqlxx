@@ -10,8 +10,6 @@ import (
 )
 
 var (
-	ErrNoDB              = xerrors.New("sqlxx: no db")
-	ErrInvalidQueryer    = xerrors.New("sqlxx: invalid queryer")
 	ErrNestedTransaction = xerrors.New("sqlxx: nested transaction")
 )
 
@@ -20,11 +18,11 @@ type DB struct {
 }
 
 type Queryer interface {
-	Get(dest interface{}, query string, args ...interface{}) error
-	Select(dest interface{}, query string, args ...interface{}) error
-	Exec(query string, args ...interface{}) (sql.Result, error)
-	NamedExec(query string, arg interface{}) (sql.Result, error)
-	Query(query string, args ...interface{}) (*sql.Rows, error)
+	QueryxContext(ctx context.Context, query string, args ...interface{}) (*sqlx.Rows, error)
+	GetContext(ctx context.Context, dest interface{}, query string, args ...interface{}) error
+	SelectContext(ctx context.Context, dest interface{}, query string, args ...interface{}) error
+	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
+	NamedExecContext(ctx context.Context, query string, arg interface{}) (sql.Result, error)
 }
 
 func New(db *sqlx.DB) *DB {
@@ -48,24 +46,24 @@ func newTxCtx(ctx context.Context, tx *sqlx.Tx) context.Context {
 	return context.WithValue(ctx, txCtxKey, tx)
 }
 
+func (db *DB) Query(ctx context.Context, query string, args ...interface{}) (*sqlx.Rows, error) {
+	return db.build(ctx).QueryxContext(ctx, query, args...)
+}
+
 func (db *DB) Get(ctx context.Context, dest interface{}, query string, args ...interface{}) error {
-	return db.build(ctx).Get(dest, query, args...)
+	return db.build(ctx).GetContext(ctx, dest, query, args...)
 }
 
 func (db *DB) Select(ctx context.Context, dest interface{}, query string, args ...interface{}) error {
-	return db.build(ctx).Select(dest, query, args...)
+	return db.build(ctx).SelectContext(ctx, dest, query, args...)
 }
 
 func (db *DB) Exec(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
-	return db.build(ctx).Exec(query, args...)
+	return db.build(ctx).ExecContext(ctx, query, args...)
 }
 
 func (db *DB) NamedExec(ctx context.Context, query string, arg interface{}) (sql.Result, error) {
-	return db.build(ctx).NamedExec(query, arg)
-}
-
-func (db *DB) Query(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
-	return db.build(ctx).Query(query, args...)
+	return db.build(ctx).NamedExecContext(ctx, query, arg)
 }
 
 type TxFunc func(context.Context) error
@@ -80,8 +78,6 @@ func (db *DB) RunInTx(ctx context.Context, txFn TxFunc) (err, rbErr error) {
 		}
 	case *sqlx.Tx:
 		return ErrNestedTransaction, nil
-	default:
-		return ErrInvalidQueryer, nil
 	}
 
 	defer func() {
@@ -89,8 +85,9 @@ func (db *DB) RunInTx(ctx context.Context, txFn TxFunc) (err, rbErr error) {
 			rbErr = tx.Rollback()
 			if pncErr, ok := pnc.(error); ok {
 				err = pncErr
+			} else {
+				err = fmt.Errorf("%v", pnc)
 			}
-			err = fmt.Errorf("%v", pnc)
 		} else if err != nil {
 			rbErr = tx.Rollback()
 		} else if cmtErr := tx.Commit(); cmtErr != nil && cmtErr != sql.ErrTxDone {

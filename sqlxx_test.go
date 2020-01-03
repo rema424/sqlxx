@@ -2,12 +2,18 @@ package sqlxx
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
+	"runtime"
+
+	// "fmt"
 	"log"
 	"os"
 	"testing"
 
-	_ "github.com/go-sql-driver/mysql"
+	"github.com/VividCortex/mysqlerr"
+	"github.com/go-sql-driver/mysql"
+	"github.com/google/go-cmp/cmp"
 	"github.com/jmoiron/sqlx"
 )
 
@@ -49,6 +55,8 @@ const DropSession = `
 drop table if exists session;
 `
 
+const testPassword = "Passw0rd!"
+
 var (
 	dbx *sqlx.DB
 	db  *DB
@@ -63,6 +71,52 @@ type User struct {
 type Session struct {
 	ID   string `db:"id"`
 	User User   `db:"user"`
+}
+
+func newUser(email, password string) User  { return User{Email: email, Password: password} }
+func newSession(id string, u User) Session { return Session{id, u} }
+
+func createUser(ctx context.Context, db *DB, s Session) (Session, error) {
+	q := `INSERT INTO user (email, password) VALUES (:email, :password);`
+	res, err := db.NamedExec(ctx, q, s.User)
+	if err != nil {
+		return s, err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return s, err
+	}
+	s.User.ID = id
+	return s, nil
+}
+
+func createSession(ctx context.Context, db *DB, s Session) (Session, error) {
+	q := `INSERT INTO session (id, user_id) VALUES (:id, :user.id);`
+	_, err := db.NamedExec(ctx, q, s)
+	return s, err
+}
+
+func getUserByEmail(ctx context.Context, db *DB, email string) (User, error) {
+	q := `SELECT id, email, password FROM user WHERE email = ?;`
+	var dest User
+	err := db.Get(ctx, &dest, q, email)
+	return dest, err
+}
+
+func getSessionByID(ctx context.Context, db *DB, id string) (Session, error) {
+	q := `
+  SELECT
+    s.id AS id,
+    u.id AS 'user.id',
+    u.email AS 'user.email',
+    u.password AS 'user.password'
+  FROM session AS s
+  INNER JOIN user AS u ON u.id = s.user_id
+  WHERE s.id = ?;
+  `
+	var dest Session
+	err := db.Get(ctx, &dest, q, id)
+	return dest, err
 }
 
 func TestMain(m *testing.M) {
@@ -122,203 +176,304 @@ func testDB(t *testing.T, db *DB) {
 	t.Helper()
 
 	var (
-		q   string
-		err error
 		ctx context.Context = context.Background()
 	)
 
 	// --------------------
 	// Exec
 	// --------------------
-	q = `INSERT INTO user (email, password) VALUES (?, ?);`
-	_, err = db.Exec(ctx, q, "111@example.com", "Passw0rd!")
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = db.Exec(ctx, q, "111@example.com", "Passw0rd!") // duplicate entry key
-	if err == nil {
-		t.Fatalf("want non-nil error")
+	{
+		u := newUser("exec@example.com", testPassword)
+		q := "INSERT INTO user (email, password) VALUES (?, ?);"
+		_, err := db.Exec(ctx, q, u.Email, u.Password)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = db.Exec(ctx, q, u.Email, u.Password) // duplicate entry
+		if err == nil {
+			t.Fatalf("want non-nil error")
+		}
 	}
 
 	// --------------------
 	// NamedExec
 	// --------------------
-	u := User{Email: "222@example.com", Password: "Passw0rd!"}
-	q = `INSERT INTO user (email, password) VALUES (:email, :password);`
-	_, err = db.NamedExec(ctx, q, u)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = db.NamedExec(ctx, q, u) // duplicate entry key
-	if err == nil {
-		t.Fatalf("want non-nil error")
+	{
+		u := newUser("namedExec@example.com", testPassword)
+		q := `INSERT INTO user (email, password) VALUES (:email, :password);`
+		_, err := db.NamedExec(ctx, q, u)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = db.NamedExec(ctx, q, u) // duplicate entry
+		if err == nil {
+			t.Fatalf("want non-nil error")
+		}
 	}
 
 	// --------------------
 	// Get
 	// --------------------
-	q = "SELECT id, email, password FROM user WHERE email = ?;"
-	var user User
-	err = db.Get(ctx, &user, q, "111@example.com")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Logf("%#v", user)
-	if got, want := user.Email, "111@example.com"; got != want {
-		t.Fatalf("wrong email: got %v, want %v", got, want)
-	}
-	if got, want := user.Password, "Passw0rd!"; got != want {
-		t.Fatalf("wrong password: got %v, want %v", got, want)
-	}
-
-	err = db.Get(ctx, &user, q, "123456789@example.com")
-	if err == nil {
-		t.Fatalf("want non-nil error")
-	} else {
-		t.Log(err)
+	{
+		u := newUser("exec@example.com", testPassword)
+		q := "SELECT id, email, password FROM user WHERE email = ?;"
+		var got User
+		err := db.Get(ctx, &got, q, u.Email)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Email != u.Email {
+			t.Fatalf("wrong email: got %v, want %v", got.Email, u.Email)
+		}
+		if got.Password != u.Password {
+			t.Fatalf("wrong password: got %v, want %v", got.Password, u.Password)
+		}
+		err = db.Get(ctx, &got, q, "123456789@example.com")
+		if err == nil {
+			t.Fatalf("want non-nil error")
+		} else {
+			// t.Log(err)
+		}
 	}
 
 	// --------------------
 	// Select
 	// --------------------
-	q = `SELECT id, email, password FROM user;`
-	var users []User
-	err = db.Select(ctx, &users, q)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Logf("%#v", users)
-	if got, want := len(users), 2; got != want {
-		t.Fatalf("wrong len: got %v, want %v", got, want)
-	}
-	if got, want := users[0].Email, "111@example.com"; got != want {
-		t.Fatalf("wrong email: got %v, want %v", got, want)
-	}
-	if got, want := users[0].Password, "Passw0rd!"; got != want {
-		t.Fatalf("wrong password: got %v, want %v", got, want)
-	}
-	if got, want := users[1].Email, "222@example.com"; got != want {
-		t.Fatalf("wrong email: got %v, want %v", got, want)
-	}
-	if got, want := users[1].Password, "Passw0rd!"; got != want {
-		t.Fatalf("wrong password: got %v, want %v", got, want)
+	{
+		q := `SELECT id, email, password FROM user;`
+		var got []User
+		err := db.Select(ctx, &got, q)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// t.Logf("%#v", got)
+		if got, want := len(got), 2; got != want {
+			t.Fatalf("wrong len: got %v, want %v", got, want)
+		}
+		if got, want := got[0].Email, "exec@example.com"; got != want {
+			t.Fatalf("wrong email: got %v, want %v", got, want)
+		}
+		if got, want := got[0].Password, testPassword; got != want {
+			t.Fatalf("wrong password: got %v, want %v", got, want)
+		}
+		if got, want := got[1].Email, "namedExec@example.com"; got != want {
+			t.Fatalf("wrong email: got %v, want %v", got, want)
+		}
+		if got, want := got[1].Password, testPassword; got != want {
+			t.Fatalf("wrong password: got %v, want %v", got, want)
+		}
 	}
 
 	// --------------------
 	// Query
 	// --------------------
-	// TODO
-
-	// --------------------
-	// RunInTx 1
-	// --------------------
-	var txFn TxFunc
-	txSession := Session{ID: "tx-transaction-test", User: User{Email: "333@example.com"}}
-
-	txFn = func(ctx context.Context) error {
-		res, err := db.NamedExec(ctx, "INSERT INTO user (email) VALUES (:email);", txSession.User)
+	{
+		q := `SELECT id, email, password FROM user;`
+		rows, err := db.Query(ctx, q)
 		if err != nil {
+			t.Fatal(err)
+		}
+		if rows.Next() {
+			var u User
+			err := rows.StructScan(&u)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got, want := u.Email, "exec@example.com"; got != want {
+				t.Fatalf("wrong email: got %v, want %v", got, want)
+			}
+			if got, want := u.Password, testPassword; got != want {
+				t.Fatalf("wrong password: got %v, want %v", got, want)
+			}
+		}
+		if rows.Next() {
+			var u User
+			err := rows.StructScan(&u)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got, want := u.Email, "namedExec@example.com"; got != want {
+				t.Fatalf("wrong email: got %v, want %v", got, want)
+			}
+			if got, want := u.Password, testPassword; got != want {
+				t.Fatalf("wrong password: got %v, want %v", got, want)
+			}
+		}
+		if rows.Next() {
+			t.Fatalf("want false")
+		}
+	}
+
+	// ------------------------------
+	// RunInTx (success)
+	// ------------------------------
+	{
+		s := newSession("tx-success", newUser("tx-success@example.com", testPassword))
+		txFn := func(ctx context.Context) error {
+			var err error
+			s, err = createUser(ctx, db, s)
+			if err != nil {
+				return err
+			}
+			s, err = createSession(ctx, db, s)
 			return err
 		}
-		id, err := res.LastInsertId()
+
+		err, rbErr := db.RunInTx(ctx, txFn)
+		if rbErr != nil {
+			t.Fatal(err)
+		}
 		if err != nil {
+			t.Fatal(err)
+		}
+
+		got, err := getSessionByID(ctx, db, s.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if diff := cmp.Diff(got, s); diff != "" {
+			t.Fatalf("wrong result: \n%s", diff)
+		}
+	}
+
+	// ------------------------------
+	// RunInTx (error)
+	// ------------------------------
+	{
+		s := newSession("tx-success", newUser("tx-error@example.com", testPassword))
+		txFn := func(ctx context.Context) error {
+			var err error
+			s, err = createUser(ctx, db, s) // success
+			if err != nil {
+				return err
+			}
+			s, err = createSession(ctx, db, s) // duplicate entry key 'tx-success'
 			return err
 		}
-		txSession.User.ID = id
-		_, err = db.NamedExec(ctx, "INSERT INTO session (id, user_id) VALUES (:id, :user.id)", txSession)
-		return err
+
+		err, rbErr := db.RunInTx(ctx, txFn)
+		if rbErr != nil {
+			t.Fatal(err)
+		}
+		if err == nil {
+			t.Fatal("want non-nil error")
+		} else {
+			// t.Log(err)
+		}
+
+		_, err = getUserByEmail(ctx, db, s.User.Email)
+		if err == nil {
+			t.Fatal("want non-nil error")
+		} else if err != sql.ErrNoRows {
+			t.Fatal("want sql.ErrNoRows")
+		} else {
+			// t.Log(err)
+		}
 	}
 
-	err, rbErr := db.RunInTx(ctx, txFn)
-	if rbErr != nil {
-		t.Fatal(err)
-	}
-	if err != nil {
-		t.Fatal(err)
-	}
-	var txResult Session
-	q = `
-  SELECT
-    s.id AS id,
-    u.id AS 'user.id',
-    u.email AS 'user.email'
-  FROM session AS s
-  INNER JOIN user AS u ON u.id = s.user_id
-  WHERE s.id = ?;
-  `
-	err = db.Get(ctx, &txResult, q, txSession.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// if diff := cmp.Diff(txSession, txResult); diff != "" {
-	// 	t.Fatalf("wrong result: \n%s", diff)
-	// }
+	// ------------------------------
+	// RunInTx (panic)
+	// ------------------------------
+	{
+		s := newSession("tx-panic", newUser("tx-panic@example.com", testPassword))
+		txFn := func(ctx context.Context) error {
+			var err error
+			s, err = createUser(ctx, db, s) // success
+			if err != nil {
+				return err
+			}
+			s, err = createSession(ctx, db, s) // success
+			if err != nil {
+				return err
+			}
+			fmt.Println([]string{}[99]) // panic and rollback
+			return nil
+		}
 
-	// --------------------
-	// RunInTx 2
-	// --------------------
-	txSession = Session{ID: "tx-transaction-test", User: User{Email: "444@example.com"}}
-	err, rbErr = db.RunInTx(ctx, txFn)
-	if rbErr != nil {
-		t.Fatal(err)
-	}
-	if err == nil {
-		t.Fatal(err)
-	} else {
-		t.Log(err)
-	}
-	var txUser User
-	err = db.Get(ctx, &txUser, "SELECT id, email FROM user WHERE email = ?;", txSession.User.Email)
-	if err == nil {
-		t.Fatalf("want non-nil error")
+		err, rbErr := db.RunInTx(ctx, txFn)
+		if rbErr != nil {
+			t.Fatal(err)
+		}
+		if err == nil {
+			t.Fatal("want non-nil error")
+		} else if err, ok := err.(runtime.Error); ok {
+			// t.Log(err)
+		} else {
+			t.Fatal(err)
+		}
+
+		_, err = getUserByEmail(ctx, db, s.User.Email)
+		if err == nil {
+			t.Fatal("want non-nil error")
+		} else if err != sql.ErrNoRows {
+			t.Fatal("want sql.ErrNoRows")
+		} else {
+			// t.Log(err)
+		}
+
+		_, err = getSessionByID(ctx, db, s.ID)
+		if err == nil {
+			t.Fatal("want non-nil error")
+		} else if err != sql.ErrNoRows {
+			t.Fatal("want sql.ErrNoRows")
+		} else {
+			// t.Log(err)
+		}
 	}
 
-	// --------------------
-	// RunInTx 3
-	// --------------------
-	txSession = Session{ID: "tx-transaction-test-2", User: User{Email: "444@example.com"}}
-	txFn = func(ctx context.Context) error {
-		res, err := db.NamedExec(ctx, "INSERT INTO user (email) VALUES (:email);", txSession.User)
-		if err != nil {
+	// ------------------------------
+	// RunInTx (nest)
+	// ------------------------------
+	{
+		s := newSession("tx-nest", newUser("tx-nest@example.com", testPassword))
+		txFn := func(ctx context.Context) error {
+			txFn := func(ctx context.Context) error {
+				var err error
+				s, err = createUser(ctx, db, s) // success
+				if err != nil {
+					return err
+				}
+				s, err = createSession(ctx, db, s) // success
+				return err
+			}
+			err, _ := db.RunInTx(ctx, txFn) // nest
 			return err
 		}
-		id, err := res.LastInsertId()
-		if err != nil {
-			return err
-		}
-		txSession.User.ID = id
-		_, err = db.NamedExec(ctx, "INSERT INTO session (id, user_id) VALUES (:id, :user.id)", txSession)
-		fmt.Println([]string{"0", "1"}[2])
-		return err
-	}
-	err, rbErr = db.RunInTx(ctx, txFn)
-	if rbErr != nil {
-		t.Fatal(err)
-	}
-	if err == nil {
-		t.Fatal(err)
-	} else {
-		t.Log(err)
-	}
-	err = db.Get(ctx, &txUser, "SELECT id, email FROM user WHERE email = ?;", txSession.User.Email)
-	if err == nil {
-		t.Fatalf("want non-nil error")
-	}
 
-	// --------------------
-	// RunInTx 4
-	// --------------------
-	txFn2 := func(ctx context.Context) error {
-		err, _ := db.RunInTx(ctx, txFn)
-		return err
+		err, rbErr := db.RunInTx(ctx, txFn)
+		if rbErr != nil {
+			t.Fatal(err)
+		}
+		if err == nil {
+			t.Fatal("want non-nil error")
+		} else if err != ErrNestedTransaction {
+			t.Fatal("want nested transaction error")
+		}
+
+		_, err = getUserByEmail(ctx, db, s.User.Email)
+		if err == nil {
+			t.Fatal("want non-nil error")
+		} else if err != sql.ErrNoRows {
+			t.Fatal("want sql.ErrNoRows")
+		} else {
+			// t.Log(err)
+		}
+
+		_, err = getSessionByID(ctx, db, s.ID)
+		if err == nil {
+			t.Fatal("want non-nil error")
+		} else if err != sql.ErrNoRows {
+			t.Fatal("want sql.ErrNoRows")
+		} else {
+			// t.Log(err)
+		}
 	}
-	err, rbErr = db.RunInTx(ctx, txFn2)
-	if rbErr != nil {
-		t.Fatal(err)
+}
+
+func isMysqlErrDupEntry(err error) bool {
+	if driverErr, ok := err.(*mysql.MySQLError); ok {
+		return driverErr.Number == mysqlerr.ER_DUP_ENTRY // 1062
 	}
-	if err == nil {
-		t.Fatal(err)
-	} else {
-		t.Log(err)
-	}
+	return false
 }
