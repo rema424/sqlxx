@@ -4,6 +4,10 @@ services:
   - mysql
 
 go:
+  - 1.10.x
+  - 1.11.x
+  - 1.12.x
+  - 1.13.x
   - tip
 
 before_install:
@@ -13,5 +17,5 @@ before_install:
   - go get github.com/mattn/goveralls
 
 script:
-  - go test -v ./...
+  - go test -cover -v ./...
   - $GOPATH/bin/goveralls -service=travis-ci
