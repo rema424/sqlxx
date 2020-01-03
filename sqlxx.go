@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
 
 	"github.com/jmoiron/sqlx"
 	"golang.org/x/xerrors"
@@ -29,9 +28,6 @@ type Queryer interface {
 }
 
 func New(db *sqlx.DB) *DB {
-	if err := db.Ping(); err != nil {
-		log.Fatalln(err)
-	}
 	return &DB{db}
 }
 
@@ -72,45 +68,36 @@ func (db *DB) Query(ctx context.Context, query string, args ...interface{}) (*sq
 	return db.build(ctx).Query(query, args...)
 }
 
-type TxFunc func(context.Context) (interface{}, error)
+type TxFunc func(context.Context) error
 
-func (db *DB) RunInTx(ctx context.Context, txFn TxFunc) (val interface{}, err, rlbkErr error) {
+func (db *DB) RunInTx(ctx context.Context, txFn TxFunc) (err, rbErr error) {
 	var tx *sqlx.Tx
 	switch q := db.build(ctx).(type) {
 	case *sqlx.DB:
-		if q == nil {
-			return nil, ErrNoDB, nil
-		}
 		tx, err = q.Beginx()
 		if err != nil {
-			return nil, err, nil
+			return err, nil
 		}
 	case *sqlx.Tx:
-		return nil, ErrNestedTransaction, nil
+		return ErrNestedTransaction, nil
 	default:
-		return nil, ErrInvalidQueryer, nil
+		return ErrInvalidQueryer, nil
 	}
 
-	txCtx := newTxCtx(ctx, tx)
-	if err != nil {
-		return nil, err, nil
-	}
-
-	// defer を利用して panic が発生した場合でも recover して rollback を実行する
 	defer func() {
 		if pnc := recover(); pnc != nil {
-			rlbkErr = tx.Rollback()
+			rbErr = tx.Rollback()
 			if pncErr, ok := pnc.(error); ok {
 				err = pncErr
 			}
 			err = fmt.Errorf("%v", pnc)
 		} else if err != nil {
-			rlbkErr = tx.Rollback()
+			rbErr = tx.Rollback()
 		} else if cmtErr := tx.Commit(); cmtErr != nil && cmtErr != sql.ErrTxDone {
 			err = cmtErr
 		}
 	}()
 
-	val, err = txFn(txCtx)
+	err = txFn(newTxCtx(ctx, tx))
 	return
 }
