@@ -4,6 +4,7 @@
 [![Coverage Status](https://coveralls.io/repos/github/rema424/sqlxx/badge.svg?branch=master)](https://coveralls.io/github/rema424/sqlxx?branch=master)
 [![Build Status](https://travis-ci.org/rema424/sqlxx.svg?branch=master)](https://travis-ci.org/rema424/sqlxx)
 [![GoDoc](https://godoc.org/github.com/rema424/sqlxx?status.svg)](https://godoc.org/github.com/rema424/sqlxx)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
 jmoiron/sqlx を拡張してトランザクション管理をアプリケーションコアから切り離せるようにしたライブラリ
 
