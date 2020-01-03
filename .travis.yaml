@@ -1,0 +1,17 @@
+language: go
+
+services:
+  - mysql
+
+go:
+  - tip
+
+before_install:
+  - mysql -uroot -e 'create database if not exists sqlxxtest;'
+  - mysql -uroot -e 'create user if not exists sqlxxtester@localhost identified by "Passw0rd!";'
+  - mysql -uroot -e 'grant all privileges on sqlxxtest.* to sqlxxtester@localhost;'
+  - go get github.com/mattn/goveralls
+
+script:
+  - go test -v ./...
+  - $GOPATH/bin/goveralls -service=travis-ci
