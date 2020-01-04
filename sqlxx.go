@@ -3,7 +3,6 @@ package sqlxx
 import (
 	"context"
 	"database/sql"
-	"fmt"
 
 	"github.com/jmoiron/sqlx"
 	"golang.org/x/xerrors"
@@ -86,7 +85,7 @@ func (db *DB) RunInTx(ctx context.Context, txFn TxFunc) (err, rbErr error) {
 			if pncErr, ok := pnc.(error); ok {
 				err = pncErr
 			} else {
-				err = fmt.Errorf("%v", pnc)
+				err = xerrors.Errorf("sqlxx: recovered: %v", pnc)
 			}
 		} else if err != nil {
 			rbErr = tx.Rollback()

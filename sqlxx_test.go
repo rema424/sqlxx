@@ -373,10 +373,10 @@ func testDB(t *testing.T, db *DB) {
 	}
 
 	// ------------------------------
-	// RunInTx (panic)
+	// RunInTx (runtime panic)
 	// ------------------------------
 	{
-		s := newSession("tx-panic", newUser("tx-panic@example.com", testPassword))
+		s := newSession("tx-runtime-panic", newUser("tx-runtime-panic@example.com", testPassword))
 		txFn := func(ctx context.Context) error {
 			var err error
 			s, err = createUser(ctx, db, s) // success
@@ -387,7 +387,7 @@ func testDB(t *testing.T, db *DB) {
 			if err != nil {
 				return err
 			}
-			fmt.Println([]string{}[99]) // panic and rollback
+			fmt.Println([]string{}[99]) // runtime panic and rollback
 			return nil
 		}
 
@@ -401,6 +401,54 @@ func testDB(t *testing.T, db *DB) {
 			// t.Log(err)
 		} else {
 			t.Fatal(err)
+		}
+
+		_, err = getUserByEmail(ctx, db, s.User.Email)
+		if err == nil {
+			t.Fatal("want non-nil error")
+		} else if err != sql.ErrNoRows {
+			t.Fatal("want sql.ErrNoRows")
+		} else {
+			// t.Log(err)
+		}
+
+		_, err = getSessionByID(ctx, db, s.ID)
+		if err == nil {
+			t.Fatal("want non-nil error")
+		} else if err != sql.ErrNoRows {
+			t.Fatal("want sql.ErrNoRows")
+		} else {
+			// t.Log(err)
+		}
+	}
+
+	// ------------------------------
+	// RunInTx (manual panic)
+	// ------------------------------
+	{
+		s := newSession("tx-manual-panic", newUser("tx-manual-panic@example.com", testPassword))
+		txFn := func(ctx context.Context) error {
+			var err error
+			s, err = createUser(ctx, db, s) // success
+			if err != nil {
+				return err
+			}
+			s, err = createSession(ctx, db, s) // success
+			if err != nil {
+				return err
+			}
+			defer panic("manual panic!!!") // manual panic and rollback
+			return nil
+		}
+
+		err, rbErr := db.RunInTx(ctx, txFn)
+		if rbErr != nil {
+			t.Fatal(err)
+		}
+		if err == nil {
+			t.Fatal("want non-nil error")
+		} else {
+			// t.Log(err)
 		}
 
 		_, err = getUserByEmail(ctx, db, s.User.Email)
