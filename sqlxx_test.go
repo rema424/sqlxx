@@ -138,13 +138,13 @@ func TestMain(m *testing.M) {
 
 func TestConnect(t *testing.T) {
 	db := New(dbx)
-	if err := db.Ping(); err != nil {
+	if err := db.dbx.Ping(); err != nil {
 		t.Fatalf("failed to Connect: %v", err)
 	}
 }
 
 func TestContext(t *testing.T) {
-	tx, err := db.Beginx()
+	tx, err := db.dbx.Beginx()
 	if err != nil {
 		t.Fatal(err)
 	}

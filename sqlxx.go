@@ -13,7 +13,7 @@ var (
 )
 
 type DB struct {
-	*sqlx.DB
+	dbx *sqlx.DB
 }
 
 type Queryer interface {
@@ -38,7 +38,7 @@ func (db *DB) build(ctx context.Context) Queryer {
 	if tx, ok := ctx.Value(txCtxKey).(*sqlx.Tx); ok {
 		return tx
 	}
-	return db.DB
+	return db.dbx
 }
 
 func newTxCtx(ctx context.Context, tx *sqlx.Tx) context.Context {
