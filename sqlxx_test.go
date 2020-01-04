@@ -4,11 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"runtime"
-
-	// "fmt"
 	"log"
 	"os"
+	"runtime"
 	"testing"
 
 	"github.com/VividCortex/mysqlerr"
@@ -231,8 +229,6 @@ func testDB(t *testing.T, db *DB) {
 		err = db.Get(ctx, &got, q, "123456789@example.com")
 		if err == nil {
 			t.Fatalf("want non-nil error")
-		} else {
-			// t.Log(err)
 		}
 	}
 
@@ -246,7 +242,6 @@ func testDB(t *testing.T, db *DB) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		// t.Logf("%#v", got)
 		if got, want := len(got), 2; got != want {
 			t.Fatalf("wrong len: got %v, want %v", got, want)
 		}
@@ -358,8 +353,6 @@ func testDB(t *testing.T, db *DB) {
 		}
 		if err == nil {
 			t.Fatal("want non-nil error")
-		} else {
-			// t.Log(err)
 		}
 
 		_, err = getUserByEmail(ctx, db, s.User.Email)
@@ -367,8 +360,6 @@ func testDB(t *testing.T, db *DB) {
 			t.Fatal("want non-nil error")
 		} else if err != sql.ErrNoRows {
 			t.Fatal("want sql.ErrNoRows")
-		} else {
-			// t.Log(err)
 		}
 	}
 
@@ -397,9 +388,7 @@ func testDB(t *testing.T, db *DB) {
 		}
 		if err == nil {
 			t.Fatal("want non-nil error")
-		} else if err, ok := err.(runtime.Error); ok {
-			// t.Log(err)
-		} else {
+		} else if _, ok := err.(runtime.Error); !ok {
 			t.Fatal(err)
 		}
 
@@ -408,8 +397,6 @@ func testDB(t *testing.T, db *DB) {
 			t.Fatal("want non-nil error")
 		} else if err != sql.ErrNoRows {
 			t.Fatal("want sql.ErrNoRows")
-		} else {
-			// t.Log(err)
 		}
 
 		_, err = getSessionByID(ctx, db, s.ID)
@@ -417,8 +404,6 @@ func testDB(t *testing.T, db *DB) {
 			t.Fatal("want non-nil error")
 		} else if err != sql.ErrNoRows {
 			t.Fatal("want sql.ErrNoRows")
-		} else {
-			// t.Log(err)
 		}
 	}
 
@@ -447,8 +432,6 @@ func testDB(t *testing.T, db *DB) {
 		}
 		if err == nil {
 			t.Fatal("want non-nil error")
-		} else {
-			// t.Log(err)
 		}
 
 		_, err = getUserByEmail(ctx, db, s.User.Email)
@@ -456,8 +439,6 @@ func testDB(t *testing.T, db *DB) {
 			t.Fatal("want non-nil error")
 		} else if err != sql.ErrNoRows {
 			t.Fatal("want sql.ErrNoRows")
-		} else {
-			// t.Log(err)
 		}
 
 		_, err = getSessionByID(ctx, db, s.ID)
@@ -465,8 +446,6 @@ func testDB(t *testing.T, db *DB) {
 			t.Fatal("want non-nil error")
 		} else if err != sql.ErrNoRows {
 			t.Fatal("want sql.ErrNoRows")
-		} else {
-			// t.Log(err)
 		}
 	}
 
@@ -504,8 +483,6 @@ func testDB(t *testing.T, db *DB) {
 			t.Fatal("want non-nil error")
 		} else if err != sql.ErrNoRows {
 			t.Fatal("want sql.ErrNoRows")
-		} else {
-			// t.Log(err)
 		}
 
 		_, err = getSessionByID(ctx, db, s.ID)
@@ -513,8 +490,6 @@ func testDB(t *testing.T, db *DB) {
 			t.Fatal("want non-nil error")
 		} else if err != sql.ErrNoRows {
 			t.Fatal("want sql.ErrNoRows")
-		} else {
-			// t.Log(err)
 		}
 	}
 }
