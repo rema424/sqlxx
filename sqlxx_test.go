@@ -194,6 +194,47 @@ func TestContext(t *testing.T) {
 	}
 }
 
+func TestClone(t *testing.T) {
+	logger := NewLogger(os.Stdout)
+	opts := &Option{234 * time.Microsecond, 435, true}
+	db := New(dbx, logger, opts)
+	clone := db.clone()
+
+	if got, want := fmt.Sprintf("%p", clone), fmt.Sprintf("%p", db); got == want {
+		t.Errorf("must not be the same address: got %v, want %v", got, want)
+	}
+
+	if got, want := *clone, *db; got != want {
+		t.Errorf("must be the same field values: got %#v, want %#v", got, want)
+	}
+}
+
+func TestSecret(t *testing.T) {
+	tests := []struct {
+		opts *Option
+	}{
+		{nil},
+		{&Option{HideParams: true}},
+		{&Option{HideParams: false}},
+	}
+
+	for _, tt := range tests {
+		db := New(dbx, nil, tt.opts)
+		before := db.hideParams
+		clone := db.Secret()
+
+		if got, want := fmt.Sprintf("%p", clone), fmt.Sprintf("%p", db); got == want {
+			t.Errorf("must not be the same address: got %v, want %v", got, want)
+		}
+		if !clone.hideParams {
+			t.Errorf("hideParams must be 'true'. got %t", clone.hideParams)
+		}
+		if db.hideParams != before {
+			t.Errorf("db.hideParams must not be overwritten. before %t, after %t", before, db.hideParams)
+		}
+	}
+}
+
 func TestMySQL(t *testing.T) {
 	ctx := context.Background()
 	testExecMySQL(ctx, db, t)
