@@ -3,6 +3,8 @@ package sqlxx
 import (
 	"context"
 	"database/sql"
+	"os"
+	"time"
 
 	"github.com/jmoiron/sqlx"
 	"golang.org/x/xerrors"
@@ -13,19 +15,47 @@ var (
 )
 
 type DB struct {
-	dbx *sqlx.DB
+	dbx          *sqlx.DB
+	logger       Logger
+	slowDuration time.Duration
+	warnRows     int
+	hideParams   bool
 }
 
-type Queryer interface {
-	QueryxContext(ctx context.Context, query string, args ...interface{}) (*sqlx.Rows, error)
-	GetContext(ctx context.Context, dest interface{}, query string, args ...interface{}) error
-	SelectContext(ctx context.Context, dest interface{}, query string, args ...interface{}) error
-	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
-	NamedExecContext(ctx context.Context, query string, arg interface{}) (sql.Result, error)
+const (
+	DefaultSlowDuration = 150 * time.Millisecond
+	DefaultWarnRows     = 1000
+	DefaultHideParams   = false
+)
+
+type Option struct {
+	SlowDuration time.Duration
+	WarnRows     int
+	HideParams   bool
 }
 
-func New(db *sqlx.DB) *DB {
-	return &DB{db}
+func New(db *sqlx.DB, l Logger, opts *Option) *DB {
+	var (
+		slowDuration time.Duration
+		warnRows     int
+		hideParams   bool
+	)
+
+	if l == nil {
+		l = NewLogger(os.Stdout)
+	}
+
+	if opts != nil {
+		slowDuration = opts.SlowDuration
+		warnRows = opts.WarnRows
+		hideParams = opts.HideParams
+	} else {
+		slowDuration = DefaultSlowDuration
+		warnRows = DefaultWarnRows
+		hideParams = DefaultHideParams
+	}
+
+	return &DB{db, l, slowDuration, warnRows, hideParams}
 }
 
 type ctxKey string
@@ -34,7 +64,15 @@ const (
 	txCtxKey ctxKey = "tx-ctx-key"
 )
 
-func (db *DB) build(ctx context.Context) Queryer {
+type queryer interface {
+	QueryxContext(ctx context.Context, query string, args ...interface{}) (*sqlx.Rows, error)
+	GetContext(ctx context.Context, dest interface{}, query string, args ...interface{}) error
+	SelectContext(ctx context.Context, dest interface{}, query string, args ...interface{}) error
+	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
+	NamedExecContext(ctx context.Context, query string, arg interface{}) (sql.Result, error)
+}
+
+func (db *DB) build(ctx context.Context) queryer {
 	if tx, ok := ctx.Value(txCtxKey).(*sqlx.Tx); ok {
 		return tx
 	}
@@ -63,6 +101,17 @@ func (db *DB) Exec(ctx context.Context, query string, args ...interface{}) (sql.
 
 func (db *DB) NamedExec(ctx context.Context, query string, arg interface{}) (sql.Result, error) {
 	return db.build(ctx).NamedExecContext(ctx, query, arg)
+}
+
+func (db *DB) Secret() *DB {
+	clone := db.clone()
+	clone.hideParams = true
+	return clone
+}
+
+func (db *DB) clone() *DB {
+	cloneDB := *db
+	return &cloneDB
 }
 
 type TxFunc func(context.Context) error

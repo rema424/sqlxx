@@ -8,6 +8,7 @@ import (
 	"os"
 	"runtime"
 	"testing"
+	"time"
 
 	"github.com/VividCortex/mysqlerr"
 	"github.com/go-sql-driver/mysql"
@@ -131,15 +132,42 @@ func TestMain(m *testing.M) {
 	dbx.MustExec(CreateUser)
 	dbx.MustExec(CreateSession)
 
-	db = New(dbx)
+	db = New(dbx, nil, nil)
 
 	os.Exit(m.Run())
 }
 
-func TestConnect(t *testing.T) {
-	db := New(dbx)
-	if err := db.dbx.Ping(); err != nil {
-		t.Fatalf("failed to Connect: %v", err)
+func TestNew(t *testing.T) {
+	tests := []struct {
+		l     Logger
+		opts  *Option
+		wantD time.Duration
+		wantR int
+		wantP bool
+	}{
+		{nil, nil, DefaultSlowDuration, DefaultWarnRows, DefaultHideParams},
+		{nil, &Option{}, 0, 0, false},
+		{NewLogger(os.Stdout), &Option{50 * time.Millisecond, 200, true}, 50 * time.Millisecond, 200, true},
+	}
+
+	for i, tt := range tests {
+		db := New(dbx, tt.l, tt.opts)
+
+		if err := db.dbx.Ping(); err != nil {
+			t.Fatalf("[#%d] failed to Connect: %v", i, err)
+		}
+		if db.logger == nil {
+			t.Errorf("[#%d] want non-nil Logger", i)
+		}
+		if got, want := db.slowDuration, tt.wantD; got != want {
+			t.Errorf("[#%d] wrong slowDuration: got %v, want %v", i, got, want)
+		}
+		if got, want := db.warnRows, tt.wantR; got != want {
+			t.Errorf("[#%d] wrong warnRows: got %v, want %v", i, got, want)
+		}
+		if got, want := db.hideParams, tt.wantP; got != want {
+			t.Errorf("[#%d] wrong hideParams: got %v, want %v", i, got, want)
+		}
 	}
 }
 
@@ -153,7 +181,7 @@ func TestContext(t *testing.T) {
 	ctx := context.Background()
 	txCtx := newTxCtx(ctx, tx)
 
-	var q Queryer
+	var q queryer
 
 	q = db.build(ctx)
 	if _, ok := q.(*sqlx.DB); !ok {
