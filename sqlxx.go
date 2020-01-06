@@ -12,6 +12,7 @@ import (
 
 var (
 	ErrNestedTransaction = xerrors.New("sqlxx: nested transaction")
+	ErrNoLogger          = xerrors.New("sqlxx: no logger")
 )
 
 type DB struct {
@@ -100,7 +101,19 @@ func (db *DB) Exec(ctx context.Context, query string, args ...interface{}) (sql.
 }
 
 func (db *DB) NamedExec(ctx context.Context, query string, arg interface{}) (sql.Result, error) {
-	return db.build(ctx).NamedExecContext(ctx, query, arg)
+	start := time.Now()
+	res, err := db.build(ctx).NamedExecContext(ctx, query, arg)
+	_, args, _ := sqlx.BindNamed(sqlx.NAMED, query, arg)
+	rows, _ := res.RowsAffected()
+	db.logging(query, args, rows, err, start)
+	return res, err
+}
+
+func (db *DB) logging(query string, args []interface{}, rows int64, err error, start time.Time) error {
+	if db.logger == nil {
+		return ErrNoLogger
+	}
+	return nil
 }
 
 func (db *DB) Secret() *DB {
