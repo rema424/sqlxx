@@ -104,12 +104,11 @@ func (db *DB) NamedExec(ctx context.Context, query string, arg interface{}) (sql
 	start := time.Now()
 	res, err := db.build(ctx).NamedExecContext(ctx, query, arg)
 	_, args, _ := sqlx.BindNamed(sqlx.NAMED, query, arg)
-	rows, _ := res.RowsAffected()
-	db.logging(query, args, rows, err, start)
+	db.log(makeLogMsg(query, args, countRows(res), err, start))
 	return res, err
 }
 
-func (db *DB) logging(query string, args []interface{}, rows int64, err error, start time.Time) error {
+func (db *DB) log(msg string) error {
 	if db.logger == nil {
 		return ErrNoLogger
 	}

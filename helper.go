@@ -1,0 +1,46 @@
+package sqlxx
+
+import (
+	"database/sql"
+	"reflect"
+	"time"
+)
+
+func countRows(obj interface{}) int {
+	if obj == nil {
+		return 0
+	}
+
+	switch obj := obj.(type) {
+	case []byte, string:
+		return 1
+	case *[]byte, *string:
+		if reflect.ValueOf(obj).IsNil() {
+			return 0
+		}
+		return 1
+	case sql.Result:
+		n, _ := obj.RowsAffected()
+		return int(n)
+	default:
+		rv := reflect.ValueOf(obj)
+		if rv.Kind() == reflect.Ptr {
+			if rv.IsNil() {
+				return 0
+			}
+			rv = reflect.Indirect(rv)
+		}
+		switch rv.Kind() {
+		case reflect.Array:
+			return rv.Len()
+		case reflect.Slice:
+			return rv.Len()
+		}
+	}
+
+	return 1
+}
+
+func makeLogMsg(query string, args []interface{}, rows int, err error, start time.Time) string {
+	return "implement me"
+}
