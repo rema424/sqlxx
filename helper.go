@@ -2,8 +2,9 @@ package sqlxx
 
 import (
 	"database/sql"
+	"fmt"
+	"io"
 	"reflect"
-	"time"
 )
 
 func countRows(obj interface{}) int {
@@ -41,6 +42,19 @@ func countRows(obj interface{}) int {
 	return 1
 }
 
-func makeLogMsg(query string, args []interface{}, rows int, err error, start time.Time) string {
-	return "implement me"
+func stringArgs(w io.Writer, args []interface{}) {
+	w.Write([]byte("["))
+	for i, arg := range args {
+		if i != 0 {
+			w.Write([]byte(", "))
+		}
+		if arg == nil {
+			fmt.Fprint(w, nil)
+		} else if v := reflect.ValueOf(arg); v.Kind() == reflect.Ptr && v.IsNil() {
+			fmt.Fprint(w, arg)
+		} else {
+			fmt.Fprint(w, reflect.Indirect(v).Interface())
+		}
+	}
+	w.Write([]byte("]"))
 }

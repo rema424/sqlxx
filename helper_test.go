@@ -1,6 +1,7 @@
 package sqlxx
 
 import (
+	"bytes"
 	"testing"
 )
 
@@ -108,5 +109,33 @@ func TestCountRows(t *testing.T) {
 			t.Errorf("[#%d] countRows(%v %T): want %v, got %v ", i+1, tt.input, tt.input, tt.want, got)
 		}
 		// t.Logf("[#%d] countRows(%v %T): want %v, got %v ", i+1, tt.input, tt.input, tt.want, got)
+	}
+}
+
+func TestStringArgs(t *testing.T) {
+	tests := []struct {
+		args []interface{}
+		want string
+	}{
+		{nil, "[]"},
+		{[]interface{}{}, "[]"},
+		{[]interface{}{""}, "[]"},
+		{[]interface{}{"aa"}, "[aa]"},
+		{[]interface{}{"aa", "bb"}, "[aa, bb]"},
+		{[]interface{}{"aa", "bb", "cc"}, "[aa, bb, cc]"},
+		{[]interface{}{"aa", 22, true}, "[aa, 22, true]"},
+		{[]interface{}{nil}, "[<nil>]"},
+		{[]interface{}{(*int)(nil), (*string)(nil)}, "[<nil>, <nil>]"},
+		{[]interface{}{new(int), new(string)}, "[0, ]"},
+	}
+
+	for i, tt := range tests {
+		var buf bytes.Buffer
+		stringArgs(&buf, tt.args)
+		got := buf.String()
+		if got != tt.want {
+			t.Errorf("#%d: want %s, got %s", i, tt.want, got)
+		}
+		t.Logf("#%d: want %s, got %s", i, tt.want, got)
 	}
 }

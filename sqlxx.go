@@ -104,15 +104,8 @@ func (db *DB) NamedExec(ctx context.Context, query string, arg interface{}) (sql
 	start := time.Now()
 	res, err := db.build(ctx).NamedExecContext(ctx, query, arg)
 	_, args, _ := sqlx.BindNamed(sqlx.NAMED, query, arg)
-	db.log(makeLogMsg(query, args, countRows(res), err, start))
+	db.log(db.makeLogMsg(query, args, countRows(res), err, start), err)
 	return res, err
-}
-
-func (db *DB) log(msg string) error {
-	if db.logger == nil {
-		return ErrNoLogger
-	}
-	return nil
 }
 
 func (db *DB) Secret() *DB {
@@ -124,6 +117,17 @@ func (db *DB) Secret() *DB {
 func (db *DB) clone() *DB {
 	cloneDB := *db
 	return &cloneDB
+}
+
+func (db *DB) log(msg string, err error) error {
+	if db.logger == nil {
+		return ErrNoLogger
+	}
+	return nil
+}
+
+func (db *DB) makeLogMsg(query string, args []interface{}, rows int, err error, start time.Time) string {
+	return "implement me"
 }
 
 type TxFunc func(context.Context) error
