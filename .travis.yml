@@ -1,5 +1,11 @@
 language: go
 
+branches:
+  only:
+    - master
+    - develop
+    - "/^v?[0-9\\.]+/"
+
 services:
   - mysql
 
