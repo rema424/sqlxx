@@ -13,8 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/VividCortex/mysqlerr"
-	"github.com/go-sql-driver/mysql"
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/google/go-cmp/cmp"
 	"github.com/jmoiron/sqlx"
 )
@@ -179,7 +178,11 @@ func TestContext(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer tx.Commit()
+	defer func() {
+		if err := tx.Commit(); err != nil {
+			t.Error(err)
+		}
+	}()
 
 	ctx := context.Background()
 	txCtx := newTxCtx(ctx, tx)
@@ -752,9 +755,9 @@ func testRunInTxNestMySQL(ctx context.Context, db *DB, t *testing.T) {
 	}
 }
 
-func isMysqlErrDupEntry(err error) bool {
-	if driverErr, ok := err.(*mysql.MySQLError); ok {
-		return driverErr.Number == mysqlerr.ER_DUP_ENTRY // 1062
-	}
-	return false
-}
+// func isMysqlErrDupEntry(err error) bool {
+// 	if driverErr, ok := err.(*mysql.MySQLError); ok {
+// 		return driverErr.Number == mysqlerr.ER_DUP_ENTRY // 1062
+// 	}
+// 	return false
+// }

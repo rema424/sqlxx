@@ -44,10 +44,10 @@ func countRows(obj interface{}) int {
 }
 
 func writeArgs(w io.Writer, args []interface{}) {
-	w.Write([]byte("["))
+	_, _ = w.Write([]byte("["))
 	for i, arg := range args {
 		if i != 0 {
-			w.Write([]byte(", "))
+			_, _ = w.Write([]byte(", "))
 		}
 		if arg == nil {
 			fmt.Fprint(w, nil)
@@ -55,14 +55,14 @@ func writeArgs(w io.Writer, args []interface{}) {
 			fmt.Fprint(w, arg)
 		}
 	}
-	w.Write([]byte("]"))
+	_, _ = w.Write([]byte("]"))
 }
 
 func writeArgsReflect(w io.Writer, args []interface{}) {
-	w.Write([]byte("["))
+	_, _ = w.Write([]byte("["))
 	for i, arg := range args {
 		if i != 0 {
-			w.Write([]byte(", "))
+			_, _ = w.Write([]byte(", "))
 		}
 		if arg == nil {
 			fmt.Fprint(w, nil)
@@ -74,7 +74,7 @@ func writeArgsReflect(w io.Writer, args []interface{}) {
 			fmt.Fprint(w, reflect.Indirect(v).Interface())
 		}
 	}
-	w.Write([]byte("]"))
+	_, _ = w.Write([]byte("]"))
 }
 
 func toMillisec(d time.Duration) float64 {

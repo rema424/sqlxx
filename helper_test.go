@@ -95,7 +95,7 @@ func TestCountRows(t *testing.T) {
 		{make([]string, 100), 100},
 		{make([]string, 0, 100), 0},
 		{make([]string, 50, 100), 50},
-		{make([]string, 100, 100), 100},
+		{make([]string, 100), 100},
 
 		{[...]string{}, 0},
 		{[...]string{"aaa"}, 1},
