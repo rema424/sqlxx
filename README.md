@@ -17,6 +17,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -70,7 +71,7 @@ func main() {
 	dbx.MustExec(sessionSchema)
 
 	// init *sqlxx.DB
-	db := sqlxx.New(dbx)
+	db := sqlxx.New(dbx, sqlxx.NewLogger(os.Stdout), nil)
 
 	// dependency injection
 	it := NewInteractor(NewRepositoryImpl(db))
