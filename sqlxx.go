@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -43,10 +42,6 @@ func New(db *sqlx.DB, l Logger, opts *Option) *DB {
 		warnRows     int
 		hideParams   bool
 	)
-
-	if l == nil {
-		l = NewLogger(os.Stdout)
-	}
 
 	if opts != nil {
 		slowDuration = opts.SlowDuration
@@ -87,19 +82,35 @@ func newTxCtx(ctx context.Context, tx *sqlx.Tx) context.Context {
 }
 
 func (db *DB) Query(ctx context.Context, query string, args ...interface{}) (*sqlx.Rows, error) {
-	return db.build(ctx).QueryxContext(ctx, query, args...)
+	start := time.Now()
+	rows, err := db.build(ctx).QueryxContext(ctx, query, args...)
+	db.log(ctx, query, args, err, 0, time.Since(start))
+	return rows, err
 }
 
 func (db *DB) Get(ctx context.Context, dest interface{}, query string, args ...interface{}) error {
-	return db.build(ctx).GetContext(ctx, dest, query, args...)
+	start := time.Now()
+	err := db.build(ctx).GetContext(ctx, dest, query, args...)
+	rows := 1
+	if err != nil {
+		rows = 0
+	}
+	db.log(ctx, query, args, err, rows, time.Since(start))
+	return err
 }
 
 func (db *DB) Select(ctx context.Context, dest interface{}, query string, args ...interface{}) error {
-	return db.build(ctx).SelectContext(ctx, dest, query, args...)
+	start := time.Now()
+	err := db.build(ctx).SelectContext(ctx, dest, query, args...)
+	db.log(ctx, query, args, err, countRows(dest), time.Since(start))
+	return err
 }
 
 func (db *DB) Exec(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
-	return db.build(ctx).ExecContext(ctx, query, args...)
+	start := time.Now()
+	res, err := db.build(ctx).ExecContext(ctx, query, args...)
+	db.log(ctx, query, args, err, countRows(res), time.Since(start))
+	return res, err
 }
 
 func (db *DB) NamedExec(ctx context.Context, query string, arg interface{}) (sql.Result, error) {

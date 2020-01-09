@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"runtime"
@@ -149,7 +150,7 @@ func TestNew(t *testing.T) {
 	}{
 		{nil, nil, DefaultSlowDuration, DefaultWarnRows, DefaultHideParams},
 		{nil, &Option{}, 0, 0, false},
-		{NewLogger(os.Stdout), &Option{50 * time.Millisecond, 200, true}, 50 * time.Millisecond, 200, true},
+		{NewLogger(ioutil.Discard), &Option{50 * time.Millisecond, 200, true}, 50 * time.Millisecond, 200, true},
 	}
 
 	for i, tt := range tests {
@@ -157,9 +158,6 @@ func TestNew(t *testing.T) {
 
 		if err := db.dbx.Ping(); err != nil {
 			t.Fatalf("[#%d] failed to Connect: %v", i, err)
-		}
-		if db.logger == nil {
-			t.Errorf("[#%d] want non-nil Logger", i)
 		}
 		if got, want := db.slowDuration, tt.wantD; got != want {
 			t.Errorf("[#%d] wrong slowDuration: got %v, want %v", i, got, want)
@@ -201,7 +199,7 @@ func TestContext(t *testing.T) {
 }
 
 func TestClone(t *testing.T) {
-	logger := NewLogger(os.Stdout)
+	logger := NewLogger(ioutil.Discard)
 	opts := &Option{234 * time.Microsecond, 435, true}
 	db := New(dbx, logger, opts)
 	clone := db.clone()
