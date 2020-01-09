@@ -3,6 +3,7 @@ package sqlxx
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -232,6 +233,83 @@ func TestSecret(t *testing.T) {
 		if db.hideParams != before {
 			t.Errorf("db.hideParams must not be overwritten. before %t, after %t", before, db.hideParams)
 		}
+	}
+}
+
+func TestMakeLogMsg(t *testing.T) {
+	tests := []struct {
+		query      string
+		args       []interface{}
+		rows       int
+		err        error
+		elapsed    time.Duration
+		hideParams bool
+		want       string
+	}{
+		{
+			"select * from person;",
+			[]interface{}{},
+			50,
+			nil,
+			123454 * time.Microsecond,
+			false,
+			"[123.45 ms] [50 rows] select * from person; []",
+		},
+		{
+			"select * from person where id = ?;",
+			[]interface{}{1},
+			1,
+			nil,
+			123454 * time.Microsecond,
+			false,
+			"[123.45 ms] [1 rows] select * from person where id = ?; [1]",
+		},
+		{
+			"select * from person where id = ?;",
+			[]interface{}{1},
+			1,
+			nil,
+			123456 * time.Microsecond,
+			false,
+			"[123.46 ms] [1 rows] select * from person where id = ?; [1]",
+		},
+		{
+			"select * from person where id = ?;",
+			[]interface{}{1},
+			1,
+			nil,
+			123456 * time.Microsecond,
+			true,
+			"[123.46 ms] [1 rows] select * from person where id = ?;",
+		},
+		{
+			"insert into person (name, email) values (?, ?);",
+			[]interface{}{"alice", "alice@example.com"},
+			1,
+			nil,
+			2345678 * time.Microsecond,
+			false,
+			"[2345.68 ms] [1 rows] insert into person (name, email) values (?, ?); [alice, alice@example.com]",
+		},
+		{
+			"insert into person (name, email) values (?, ?);",
+			[]interface{}{"alice", "alice@example.com"},
+			1,
+			errors.New("sqlxx: some error occurs"),
+			2345678 * time.Microsecond,
+			false,
+			"sqlxx: some error occurs [2345.68 ms] [1 rows] insert into person (name, email) values (?, ?); [alice, alice@example.com]",
+		},
+	}
+
+	for i, tt := range tests {
+		db := &DB{hideParams: tt.hideParams}
+		got := db.makeLogMsg(tt.query, tt.args, tt.rows, tt.err, tt.elapsed)
+
+		if got != tt.want {
+			t.Errorf("#%d: want %s, got %s", i, tt.want, got)
+		}
+		// t.Logf("#%d: want %s, got %s", i, tt.want, got)
 	}
 }
 

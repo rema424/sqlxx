@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"time"
 )
 
 func countRows(obj interface{}) int {
@@ -42,7 +43,7 @@ func countRows(obj interface{}) int {
 	return 1
 }
 
-func stringArgs(w io.Writer, args []interface{}) {
+func writeArgs(w io.Writer, args []interface{}) {
 	w.Write([]byte("["))
 	for i, arg := range args {
 		if i != 0 {
@@ -57,7 +58,7 @@ func stringArgs(w io.Writer, args []interface{}) {
 	w.Write([]byte("]"))
 }
 
-func stringArgsReflect(w io.Writer, args []interface{}) {
+func writeArgsReflect(w io.Writer, args []interface{}) {
 	w.Write([]byte("["))
 	for i, arg := range args {
 		if i != 0 {
@@ -74,4 +75,8 @@ func stringArgsReflect(w io.Writer, args []interface{}) {
 		}
 	}
 	w.Write([]byte("]"))
+}
+
+func toMillisec(d time.Duration) float64 {
+	return float64(d) / float64(time.Millisecond)
 }

@@ -3,7 +3,9 @@ package sqlxx
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -104,7 +106,7 @@ func (db *DB) NamedExec(ctx context.Context, query string, arg interface{}) (sql
 	start := time.Now()
 	res, err := db.build(ctx).NamedExecContext(ctx, query, arg)
 	_, args, _ := sqlx.BindNamed(sqlx.NAMED, query, arg)
-	db.log(db.makeLogMsg(query, args, countRows(res), err, start), err)
+	db.log(db.makeLogMsg(query, args, countRows(res), err, time.Since(start)), err)
 	return res, err
 }
 
@@ -126,8 +128,25 @@ func (db *DB) log(msg string, err error) error {
 	return nil
 }
 
-func (db *DB) makeLogMsg(query string, args []interface{}, rows int, err error, start time.Time) string {
-	return "implement me"
+func (db *DB) makeLogMsg(query string, args []interface{}, rows int, err error, elapsed time.Duration) string {
+	var b strings.Builder
+	b.Grow(1024)
+
+	if err != nil && err != sql.ErrNoRows {
+		b.WriteString(err.Error())
+		b.WriteString(" ")
+	}
+
+	fmt.Fprintf(&b, "[%.2f ms] [%d rows] ", toMillisec(elapsed), rows)
+
+	b.WriteString(query)
+
+	if !db.hideParams {
+		b.WriteString(" ")
+		writeArgs(&b, args)
+	}
+
+	return b.String()
 }
 
 type TxFunc func(context.Context) error

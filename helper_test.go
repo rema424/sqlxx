@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"regexp"
 	"testing"
+	"time"
 )
 
 type sqlResultMock struct{ lastInsertID, rowsAffected int64 }
@@ -114,7 +115,7 @@ func TestCountRows(t *testing.T) {
 	}
 }
 
-func TestStringArgs(t *testing.T) {
+func TestWriteArgs(t *testing.T) {
 	tests := []struct {
 		args []interface{}
 		want string
@@ -132,7 +133,7 @@ func TestStringArgs(t *testing.T) {
 
 	for i, tt := range tests {
 		var buf bytes.Buffer
-		stringArgs(&buf, tt.args)
+		writeArgs(&buf, tt.args)
 		got := buf.String()
 		if got != tt.want {
 			t.Errorf("#%d: want %s, got %s", i, tt.want, got)
@@ -141,7 +142,7 @@ func TestStringArgs(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	stringArgs(&buf, []interface{}{new(int), new(string)})
+	writeArgs(&buf, []interface{}{new(int), new(string)})
 	got := buf.String()
 	r := regexp.MustCompile(`^\[(0xc[\da-f]{9}(, )?)*\]$`)
 	if !r.MatchString(got) {
@@ -150,7 +151,7 @@ func TestStringArgs(t *testing.T) {
 	// t.Logf("#%d: want ^\\[(0xc[\\da-f]{9}(, )?)*\\]$, got %s", len(tests), got)
 }
 
-func TestStringArgsReflect(t *testing.T) {
+func TestWriteArgsReflect(t *testing.T) {
 	tests := []struct {
 		args []interface{}
 		want string
@@ -169,7 +170,7 @@ func TestStringArgsReflect(t *testing.T) {
 
 	for i, tt := range tests {
 		var buf bytes.Buffer
-		stringArgsReflect(&buf, tt.args)
+		writeArgsReflect(&buf, tt.args)
 		got := buf.String()
 		if got != tt.want {
 			t.Errorf("#%d: want %s, got %s", i, tt.want, got)
@@ -178,26 +179,45 @@ func TestStringArgsReflect(t *testing.T) {
 	}
 }
 
-func BenchmarkStringArgsPointer(b *testing.B) {
+func BenchmarkWriteArgsPointer(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		stringArgs(ioutil.Discard, []interface{}{(*int)(nil), (*uint8)(nil), (*string)(nil)})
+		writeArgs(ioutil.Discard, []interface{}{(*int)(nil), (*uint8)(nil), (*string)(nil)})
 	}
 }
 
-func BenchmarkStringArgsReflectPointer(b *testing.B) {
+func BenchmarkWriteArgsReflectPointer(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		stringArgsReflect(ioutil.Discard, []interface{}{(*int)(nil), (*uint8)(nil), (*string)(nil)})
+		writeArgsReflect(ioutil.Discard, []interface{}{(*int)(nil), (*uint8)(nil), (*string)(nil)})
 	}
 }
 
-func BenchmarkStringArgsValue(b *testing.B) {
+func BenchmarkWriteArgsValue(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		stringArgs(ioutil.Discard, []interface{}{int(100), uint8(100), string("100")})
+		writeArgs(ioutil.Discard, []interface{}{int(100), uint8(100), string("100")})
 	}
 }
 
-func BenchmarkStringArgsReflectValue(b *testing.B) {
+func BenchmarkWriteArgsReflectValue(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		stringArgsReflect(ioutil.Discard, []interface{}{int(100), uint8(100), string("100")})
+		writeArgsReflect(ioutil.Discard, []interface{}{int(100), uint8(100), string("100")})
+	}
+}
+
+func TestToMillisec(t *testing.T) {
+	tests := []struct {
+		d    time.Duration
+		want float64
+	}{
+		{time.Second, 1000},
+		{2 * time.Second, 2000},
+		{time.Minute, 1000 * 60},
+		{time.Microsecond, 0.001},
+	}
+
+	for i, tt := range tests {
+		got := toMillisec(tt.d)
+		if got != tt.want {
+			t.Errorf("%d: want %f, got %f", i, tt.want, got)
+		}
 	}
 }
