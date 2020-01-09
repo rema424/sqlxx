@@ -238,6 +238,45 @@ func TestSecret(t *testing.T) {
 	}
 }
 
+func TestLog(t *testing.T) {
+	var buf bytes.Buffer
+
+	db := &DB{
+		slowDuration: DefaultSlowDuration,
+		warnRows:     DefaultWarnRows,
+		hideParams:   DefaultHideParams,
+		logger:       NewLogger(&buf),
+	}
+
+	ctx := context.Background()
+	db.log(ctx, "query", []interface{}{"arg"}, errors.New("error"), 10, 100*time.Millisecond)
+
+	got := buf.String()
+	parts := strings.Split(got, " ")
+	wantP := "[WARN]"
+	wantS := "error [100.00 ms] [10 rows] query [arg]\n"
+	if !strings.HasPrefix(got, wantP) {
+		t.Errorf("Prefix: want %s, got %s", wantP, parts[0])
+	}
+	if !strings.HasSuffix(got, wantS) {
+		t.Errorf("Suffix: want '%s', got '%s'", wantS, strings.Join(parts[3:], " "))
+	}
+	t.Logf("want %s, got %s", wantP+" "+wantS, got)
+}
+
+func TestLogNilLogger(t *testing.T) {
+	db := &DB{logger: nil}
+	ctx := context.Background()
+
+	defer func() {
+		if pnc := recover(); pnc != nil {
+			t.Errorf("want no panic, got %v", pnc)
+		}
+	}()
+
+	db.log(ctx, "query", nil, nil, 0, 0)
+}
+
 func TestLoggerFunc(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -296,7 +335,7 @@ func TestLoggerFunc(t *testing.T) {
 				logger:       NewLogger(&buf),
 			}
 
-			fn := db.loggerFunc(tt.d, tt.rows, tt.err)
+			fn := db.loggerFunc(tt.err, tt.rows, tt.d)
 			fn(context.Background(), "some message...")
 
 			got := buf.String()
@@ -310,7 +349,7 @@ func TestLoggerFunc(t *testing.T) {
 
 func TestLoggerFuncNilLogger(t *testing.T) {
 	db := &DB{logger: nil}
-	fn := db.loggerFunc(DefaultSlowDuration, DefaultWarnRows, nil)
+	fn := db.loggerFunc(nil, DefaultWarnRows, DefaultSlowDuration)
 	if fn != nil {
 		t.Errorf("want nil")
 	}

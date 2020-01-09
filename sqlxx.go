@@ -106,51 +106,35 @@ func (db *DB) NamedExec(ctx context.Context, query string, arg interface{}) (sql
 	start := time.Now()
 	res, err := db.build(ctx).NamedExecContext(ctx, query, arg)
 	_, args, _ := sqlx.BindNamed(sqlx.NAMED, query, arg)
-	d := time.Since(start)
-	db.log(err, d, db.makeLogMsg(query, args, countRows(res), err, d))
+	db.log(ctx, query, args, err, countRows(res), time.Since(start))
 	return res, err
 }
 
-func (db *DB) Secret() *DB {
-	clone := db.clone()
-	clone.hideParams = true
-	return clone
+func (db *DB) log(ctx context.Context, query string, args []interface{}, err error, rows int, d time.Duration) {
+	if db.logger == nil {
+		return
+	}
+
+	fn := db.loggerFunc(err, rows, d)
+	msg := db.makeLogMsg(query, args, rows, err, d)
+
+	fn(ctx, msg)
 }
 
-func (db *DB) clone() *DB {
-	cloneDB := *db
-	return &cloneDB
-}
-
-func (db *DB) loggerFunc(d time.Duration, rows int, err error) loggerFunc {
+func (db *DB) loggerFunc(err error, rows int, d time.Duration) loggerFunc {
 	if db.logger == nil {
 		return nil
 	}
 
 	if err != nil && err != sql.ErrNoRows {
 		return db.logger.Warnf
-	} else if d > db.slowDuration {
-		return db.logger.Warnf
 	} else if rows > db.warnRows {
+		return db.logger.Warnf
+	} else if d > db.slowDuration {
 		return db.logger.Warnf
 	}
 
 	return db.logger.Debugf
-}
-
-func (db *DB) log(err error, d time.Duration, msg string) {
-	// if db.logger == nil {
-	// 	return
-	// }
-
-	// logFunc := db.logger.Debugf
-
-	// if err != nil && err != sql.ErrNoRows {
-	// 	logFunc = db.logger.Warnf
-	// } else if d > db.slowDuration {
-	//   logFunc = db.logger.Warnf
-	// } else if rows
-	// return
 }
 
 func (db *DB) makeLogMsg(query string, args []interface{}, rows int, err error, elapsed time.Duration) string {
@@ -172,6 +156,17 @@ func (db *DB) makeLogMsg(query string, args []interface{}, rows int, err error, 
 	}
 
 	return b.String()
+}
+
+func (db *DB) Secret() *DB {
+	clone := db.clone()
+	clone.hideParams = true
+	return clone
+}
+
+func (db *DB) clone() *DB {
+	cloneDB := *db
+	return &cloneDB
 }
 
 type TxFunc func(context.Context) error
