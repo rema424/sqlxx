@@ -106,7 +106,8 @@ func (db *DB) NamedExec(ctx context.Context, query string, arg interface{}) (sql
 	start := time.Now()
 	res, err := db.build(ctx).NamedExecContext(ctx, query, arg)
 	_, args, _ := sqlx.BindNamed(sqlx.NAMED, query, arg)
-	db.log(db.makeLogMsg(query, args, countRows(res), err, time.Since(start)), err)
+	d := time.Since(start)
+	db.log(err, d, db.makeLogMsg(query, args, countRows(res), err, d))
 	return res, err
 }
 
@@ -121,11 +122,35 @@ func (db *DB) clone() *DB {
 	return &cloneDB
 }
 
-func (db *DB) log(msg string, err error) error {
+func (db *DB) loggerFunc(d time.Duration, rows int, err error) loggerFunc {
 	if db.logger == nil {
-		return ErrNoLogger
+		return nil
 	}
-	return nil
+
+	if err != nil && err != sql.ErrNoRows {
+		return db.logger.Warnf
+	} else if d > db.slowDuration {
+		return db.logger.Warnf
+	} else if rows > db.warnRows {
+		return db.logger.Warnf
+	}
+
+	return db.logger.Debugf
+}
+
+func (db *DB) log(err error, d time.Duration, msg string) {
+	// if db.logger == nil {
+	// 	return
+	// }
+
+	// logFunc := db.logger.Debugf
+
+	// if err != nil && err != sql.ErrNoRows {
+	// 	logFunc = db.logger.Warnf
+	// } else if d > db.slowDuration {
+	//   logFunc = db.logger.Warnf
+	// } else if rows
+	// return
 }
 
 func (db *DB) makeLogMsg(query string, args []interface{}, rows int, err error, elapsed time.Duration) string {

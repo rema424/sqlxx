@@ -1,6 +1,7 @@
 package sqlxx
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"errors"
@@ -8,6 +9,7 @@ import (
 	"log"
 	"os"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -233,6 +235,84 @@ func TestSecret(t *testing.T) {
 		if db.hideParams != before {
 			t.Errorf("db.hideParams must not be overwritten. before %t, after %t", before, db.hideParams)
 		}
+	}
+}
+
+func TestLoggerFunc(t *testing.T) {
+	tests := []struct {
+		name         string
+		slowDuration time.Duration
+		warnRows     int
+		d            time.Duration
+		rows         int
+		err          error
+		want         string
+	}{
+		{
+			"normal",
+			150 * time.Millisecond,
+			1000,
+			150 * time.Millisecond,
+			1000,
+			nil,
+			"[DEBUG]",
+		},
+		{
+			"duration",
+			150 * time.Millisecond,
+			1000,
+			151 * time.Millisecond,
+			1000,
+			nil,
+			"[WARN]",
+		},
+		{
+			"rows",
+			150 * time.Millisecond,
+			1000,
+			150 * time.Millisecond,
+			1001,
+			nil,
+			"[WARN]",
+		},
+		{
+			"error",
+			150 * time.Millisecond,
+			1000,
+			150 * time.Millisecond,
+			1000,
+			errors.New("some error"),
+			"[WARN]",
+		},
+	}
+
+	for i, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+
+			var buf bytes.Buffer
+			db := &DB{
+				slowDuration: tt.slowDuration,
+				warnRows:     tt.warnRows,
+				logger:       NewLogger(&buf),
+			}
+
+			fn := db.loggerFunc(tt.d, tt.rows, tt.err)
+			fn(context.Background(), "some message...")
+
+			got := buf.String()
+			if !strings.HasPrefix(got, tt.want) {
+				t.Errorf("#%d: want %s, got %s", i, tt.want, strings.Split(got, " ")[0])
+			}
+			t.Logf("#%d: want %s, got %s", i, tt.want, strings.Split(got, " ")[0])
+		})
+	}
+}
+
+func TestLoggerFuncNilLogger(t *testing.T) {
+	db := &DB{logger: nil}
+	fn := db.loggerFunc(DefaultSlowDuration, DefaultWarnRows, nil)
+	if fn != nil {
+		t.Errorf("want nil")
 	}
 }
 
