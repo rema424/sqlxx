@@ -2,6 +2,8 @@ package sqlxx
 
 import (
 	"bytes"
+	"io/ioutil"
+	"regexp"
 	"testing"
 )
 
@@ -126,7 +128,6 @@ func TestStringArgs(t *testing.T) {
 		{[]interface{}{"aa", 22, true}, "[aa, 22, true]"},
 		{[]interface{}{nil}, "[<nil>]"},
 		{[]interface{}{(*int)(nil), (*string)(nil)}, "[<nil>, <nil>]"},
-		{[]interface{}{new(int), new(string)}, "[0, ]"},
 	}
 
 	for i, tt := range tests {
@@ -136,6 +137,67 @@ func TestStringArgs(t *testing.T) {
 		if got != tt.want {
 			t.Errorf("#%d: want %s, got %s", i, tt.want, got)
 		}
-		t.Logf("#%d: want %s, got %s", i, tt.want, got)
+		// t.Logf("#%d: want %s, got %s", i, tt.want, got)
+	}
+
+	var buf bytes.Buffer
+	stringArgs(&buf, []interface{}{new(int), new(string)})
+	got := buf.String()
+	r := regexp.MustCompile(`^\[(0xc[\da-f]{9}(, )?)*\]$`)
+	if !r.MatchString(got) {
+		t.Errorf("#%d: want ^\\[(0xc[\\da-f]{9}(, )?)*\\]$, got %s", len(tests), got)
+	}
+	// t.Logf("#%d: want ^\\[(0xc[\\da-f]{9}(, )?)*\\]$, got %s", len(tests), got)
+}
+
+func TestStringArgsReflect(t *testing.T) {
+	tests := []struct {
+		args []interface{}
+		want string
+	}{
+		{nil, "[]"},
+		{[]interface{}{}, "[]"},
+		{[]interface{}{""}, "[]"},
+		{[]interface{}{"aa"}, "[aa]"},
+		{[]interface{}{"aa", "bb"}, "[aa, bb]"},
+		{[]interface{}{"aa", "bb", "cc"}, "[aa, bb, cc]"},
+		{[]interface{}{"aa", 22, true}, "[aa, 22, true]"},
+		{[]interface{}{nil}, "[<nil>]"},
+		{[]interface{}{(*int)(nil), (*string)(nil)}, "[<nil>, <nil>]"},
+		{[]interface{}{new(int), new(string)}, "[0, ]"},
+	}
+
+	for i, tt := range tests {
+		var buf bytes.Buffer
+		stringArgsReflect(&buf, tt.args)
+		got := buf.String()
+		if got != tt.want {
+			t.Errorf("#%d: want %s, got %s", i, tt.want, got)
+		}
+		// t.Logf("#%d: want %s, got %s", i, tt.want, got)
+	}
+}
+
+func BenchmarkStringArgsPointer(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		stringArgs(ioutil.Discard, []interface{}{(*int)(nil), (*uint8)(nil), (*string)(nil)})
+	}
+}
+
+func BenchmarkStringArgsReflectPointer(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		stringArgsReflect(ioutil.Discard, []interface{}{(*int)(nil), (*uint8)(nil), (*string)(nil)})
+	}
+}
+
+func BenchmarkStringArgsValue(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		stringArgs(ioutil.Discard, []interface{}{int(100), uint8(100), string("100")})
+	}
+}
+
+func BenchmarkStringArgsReflectValue(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		stringArgsReflect(ioutil.Discard, []interface{}{int(100), uint8(100), string("100")})
 	}
 }

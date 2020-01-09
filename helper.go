@@ -50,7 +50,24 @@ func stringArgs(w io.Writer, args []interface{}) {
 		}
 		if arg == nil {
 			fmt.Fprint(w, nil)
-		} else if v := reflect.ValueOf(arg); v.Kind() == reflect.Ptr && v.IsNil() {
+		} else {
+			fmt.Fprint(w, arg)
+		}
+	}
+	w.Write([]byte("]"))
+}
+
+func stringArgsReflect(w io.Writer, args []interface{}) {
+	w.Write([]byte("["))
+	for i, arg := range args {
+		if i != 0 {
+			w.Write([]byte(", "))
+		}
+		if arg == nil {
+			fmt.Fprint(w, nil)
+		} else if v := reflect.ValueOf(arg); v.Kind() != reflect.Ptr {
+			fmt.Fprint(w, arg)
+		} else if v.IsNil() {
 			fmt.Fprint(w, arg)
 		} else {
 			fmt.Fprint(w, reflect.Indirect(v).Interface())
