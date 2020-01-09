@@ -32,8 +32,8 @@ func TestCountRows(t *testing.T) {
 		valStr            string    = "333"
 		valBytes          []byte    = []byte("asf")
 		valStruct         Person    = Person{"Alice"}
-		valStructSlice    []Person  = []Person{Person{"Alice"}, Person{"Bob"}}
-		valStructPtrSlice []*Person = []*Person{&Person{"Alice"}, &Person{"Bob"}}
+		valStructSlice    []Person  = []Person{{"Alice"}, {"Bob"}}
+		valStructPtrSlice []*Person = []*Person{{"Alice"}, {"Bob"}}
 
 		ptrInt            *int       = &valInt
 		ptrInt64          *int64     = &valInt64
