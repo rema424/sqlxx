@@ -6,6 +6,8 @@ import (
 	"io"
 	"reflect"
 	"time"
+
+	"github.com/jmoiron/sqlx"
 )
 
 func countRows(obj interface{}) int {
@@ -24,6 +26,12 @@ func countRows(obj interface{}) int {
 	case sql.Result:
 		n, _ := obj.RowsAffected()
 		return int(n)
+	case *sqlx.Rows:
+		var n int
+		for obj.Next() {
+			n++
+		}
+		return n
 	default:
 		rv := reflect.ValueOf(obj)
 		if rv.Kind() == reflect.Ptr {
