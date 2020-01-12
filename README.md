@@ -51,7 +51,7 @@ create table if not exists user (
 `
 
 func main() {
-	// craate database, user
+	// create database, user
 	//
 	// $ mysql.server start
 	// $ mysql -uroot -e 'create database if not exists sqlxxtest;'
