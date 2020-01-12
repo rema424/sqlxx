@@ -85,8 +85,8 @@ func NewInteractor(repo Repository) *Interactor {
 	return &Interactor{repo}
 }
 
-func (it *Interactor) Signup(ctx context.Context, email, passwordRow string) (Session, error) {
-	u := NewUser(email, passwordRow)
+func (it *Interactor) Signup(ctx context.Context, email, passwordRaw string) (Session, error) {
+	u := NewUser(email, passwordRaw)
 	s := NewSession(u)
 
 	txFn := func(ctx context.Context) error {
@@ -119,6 +119,8 @@ type Repository interface {
 	RunInTx(context.Context, func(context.Context) error) (err, rbErr error)
 	CreateUser(context.Context, Session) (Session, error)
 	CreateSession(context.Context, Session) (Session, error)
+	GetUserByID(ctx context.Context, id int64) (User, error)
+	GetSessionByID(ctx context.Context, id string) (Session, error)
 }
 
 type RepositoryImpl struct {
@@ -147,9 +149,33 @@ func (r *RepositoryImpl) CreateUser(ctx context.Context, s Session) (Session, er
 	return s, nil
 }
 
+func (r *RepositoryImpl) GetUserByID(ctx context.Context, id int64) (User, error) {
+	q := `SELECT id, email, password FROM user WHERE id = ?;`
+	var u User
+	err := r.db.Get(ctx, &u, q, id)
+	return u, err
+}
+
 func (r *RepositoryImpl) CreateSession(ctx context.Context, s Session) (Session, error) {
 	q := `INSERT INTO session (id, expire_at, user_id) VALUES (:id, :expire_at, :user.id);`
 	_, err := r.db.NamedExec(ctx, q, s)
+	return s, err
+}
+
+func (r *RepositoryImpl) GetSessionByID(ctx context.Context, id string) (Session, error) {
+	q := `
+  SELECT
+    s.id,
+    s.expire_at,
+    u.id AS 'user.id',
+    u.email AS 'user.email',
+    u.password AS 'user.password'
+  FROM session AS s
+  INNER JOIN user AS u ON u.id = s.user_id
+  WHERE s.id = ?;
+  `
+	var s Session
+	err := r.db.Get(ctx, &s, q, id)
 	return s, err
 }
 
@@ -177,8 +203,8 @@ func NewSession(u User) Session {
 	}
 }
 
-func NewUser(email, passwordRow string) User {
-	b, _ := bcrypt.GenerateFromPassword([]byte(passwordRow), bcrypt.DefaultCost)
+func NewUser(email, passwordRaw string) User {
+	b, _ := bcrypt.GenerateFromPassword([]byte(passwordRaw), bcrypt.DefaultCost)
 	return User{
 		Email:    email,
 		Password: string(b),

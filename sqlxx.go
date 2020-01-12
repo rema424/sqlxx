@@ -90,6 +90,9 @@ func newTxCtx(ctx context.Context, tx *sqlx.Tx) context.Context {
 func (db *DB) Query(ctx context.Context, query string, args ...interface{}) (*sqlx.Rows, error) {
 	start := time.Now()
 	rows, err := db.build(ctx).QueryxContext(ctx, query, args...)
+	if err != nil {
+		defer rows.Close()
+	}
 	clone := *rows
 	db.log(ctx, CmdQuery, query, args, err, countRows(&clone), time.Since(start))
 	return rows, err
