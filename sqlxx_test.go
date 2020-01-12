@@ -250,7 +250,7 @@ func TestLog(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	db.log(ctx, "query", []interface{}{"arg"}, errors.New("error"), 10, 100*time.Millisecond)
+	db.log(ctx, "CMD", "query", []interface{}{"arg"}, errors.New("error"), 10, 100*time.Millisecond)
 
 	got := buf.String()
 	parts := strings.Split(got, " ")
@@ -275,7 +275,7 @@ func TestLogNilLogger(t *testing.T) {
 		}
 	}()
 
-	db.log(ctx, "query", nil, nil, 0, 0)
+	db.log(ctx, "CMD", "query", nil, nil, 0, 0)
 }
 
 func TestLoggerFunc(t *testing.T) {
@@ -358,6 +358,7 @@ func TestLoggerFuncNilLogger(t *testing.T) {
 
 func TestMakeLogMsg(t *testing.T) {
 	tests := []struct {
+		cmd        string
 		query      string
 		args       []interface{}
 		rows       int
@@ -367,64 +368,70 @@ func TestMakeLogMsg(t *testing.T) {
 		want       string
 	}{
 		{
+			"SELECT",
 			"select * from person;",
 			[]interface{}{},
 			50,
 			nil,
 			123454 * time.Microsecond,
 			false,
-			"[123.45 ms] [50 rows] select * from person; []",
+			"[SELECT] [123.45 ms] [50 rows] select * from person; []",
 		},
 		{
+			"SELECT",
 			"select * from person where id = ?;",
 			[]interface{}{1},
 			1,
 			nil,
 			123454 * time.Microsecond,
 			false,
-			"[123.45 ms] [1 rows] select * from person where id = ?; [1]",
+			"[SELECT] [123.45 ms] [1 rows] select * from person where id = ?; [1]",
 		},
 		{
+			"GET",
 			"select * from person where id = ?;",
 			[]interface{}{1},
 			1,
 			nil,
 			123456 * time.Microsecond,
 			false,
-			"[123.46 ms] [1 rows] select * from person where id = ?; [1]",
+			"[GET] [123.46 ms] [1 rows] select * from person where id = ?; [1]",
 		},
 		{
+			"GET",
 			"select * from person where id = ?;",
 			[]interface{}{1},
 			1,
 			nil,
 			123456 * time.Microsecond,
 			true,
-			"[123.46 ms] [1 rows] select * from person where id = ?;",
+			"[GET] [123.46 ms] [1 rows] select * from person where id = ?;",
 		},
 		{
+			"EXEC",
 			"insert into person (name, email) values (?, ?);",
 			[]interface{}{"alice", "alice@example.com"},
 			1,
 			nil,
 			2345678 * time.Microsecond,
 			false,
-			"[2345.68 ms] [1 rows] insert into person (name, email) values (?, ?); [alice, alice@example.com]",
+			"[EXEC] [2345.68 ms] [1 rows] insert into person (name, email) values (?, ?); [alice, alice@example.com]",
 		},
 		{
+			"EXEC",
 			"insert into person (name, email) values (?, ?);",
 			[]interface{}{"alice", "alice@example.com"},
 			1,
 			errors.New("sqlxx: some error occurs"),
 			2345678 * time.Microsecond,
 			false,
-			"sqlxx: some error occurs [2345.68 ms] [1 rows] insert into person (name, email) values (?, ?); [alice, alice@example.com]",
+			"[EXEC] sqlxx: some error occurs [2345.68 ms] [1 rows] insert into person (name, email) values (?, ?); [alice, alice@example.com]",
 		},
 	}
 
 	for i, tt := range tests {
 		db := &DB{hideParams: tt.hideParams}
-		got := db.makeLogMsg(tt.query, tt.args, tt.rows, tt.err, tt.elapsed)
+		got := db.makeLogMsg(tt.cmd, tt.query, tt.args, tt.rows, tt.err, tt.elapsed)
 
 		if got != tt.want {
 			t.Errorf("#%d: want %s, got %s", i, tt.want, got)
@@ -435,6 +442,7 @@ func TestMakeLogMsg(t *testing.T) {
 
 func TestMySQL(t *testing.T) {
 	ctx := context.Background()
+	db := New(dbx, NewLogger(os.Stdout), nil)
 	testExecMySQL(ctx, db, t)
 	testNamedExecMySQL(ctx, db, t)
 	testGetMySQL(ctx, db, t)
@@ -448,7 +456,7 @@ func TestMySQL(t *testing.T) {
 }
 
 func testExecMySQL(ctx context.Context, db *DB, t *testing.T) {
-	t.Helper()
+	// t.Helper()
 
 	u := newUser("exec@example.com", testPassword)
 	q := "INSERT INTO user (email, password) VALUES (?, ?);"
@@ -463,7 +471,7 @@ func testExecMySQL(ctx context.Context, db *DB, t *testing.T) {
 }
 
 func testNamedExecMySQL(ctx context.Context, db *DB, t *testing.T) {
-	t.Helper()
+	// t.Helper()
 
 	u := newUser("namedExec@example.com", testPassword)
 	q := `INSERT INTO user (email, password) VALUES (:email, :password);`
@@ -478,7 +486,7 @@ func testNamedExecMySQL(ctx context.Context, db *DB, t *testing.T) {
 }
 
 func testGetMySQL(ctx context.Context, db *DB, t *testing.T) {
-	t.Helper()
+	// t.Helper()
 
 	u := newUser("exec@example.com", testPassword)
 	q := "SELECT id, email, password FROM user WHERE email = ?;"
@@ -500,7 +508,7 @@ func testGetMySQL(ctx context.Context, db *DB, t *testing.T) {
 }
 
 func testSelectMySQL(ctx context.Context, db *DB, t *testing.T) {
-	t.Helper()
+	// t.Helper()
 
 	q := `SELECT id, email, password FROM user;`
 	var got []User
@@ -526,7 +534,7 @@ func testSelectMySQL(ctx context.Context, db *DB, t *testing.T) {
 }
 
 func testQueryMySQL(ctx context.Context, db *DB, t *testing.T) {
-	t.Helper()
+	// t.Helper()
 
 	q := `SELECT id, email, password FROM user;`
 	rows, err := db.Query(ctx, q)
@@ -565,7 +573,7 @@ func testQueryMySQL(ctx context.Context, db *DB, t *testing.T) {
 }
 
 func testRunInTxSuccessMySQL(ctx context.Context, db *DB, t *testing.T) {
-	t.Helper()
+	// t.Helper()
 
 	s := newSession("tx-success", newUser("tx-success@example.com", testPassword))
 	txFn := func(ctx context.Context) error {
@@ -597,7 +605,7 @@ func testRunInTxSuccessMySQL(ctx context.Context, db *DB, t *testing.T) {
 }
 
 func testRunInTxErrorMySQL(ctx context.Context, db *DB, t *testing.T) {
-	t.Helper()
+	// t.Helper()
 
 	s := newSession("tx-success", newUser("tx-error@example.com", testPassword))
 	txFn := func(ctx context.Context) error {
@@ -627,7 +635,7 @@ func testRunInTxErrorMySQL(ctx context.Context, db *DB, t *testing.T) {
 }
 
 func testRunInTxRuntimePanicMySQL(ctx context.Context, db *DB, t *testing.T) {
-	t.Helper()
+	// t.Helper()
 
 	s := newSession("tx-runtime-panic", newUser("tx-runtime-panic@example.com", testPassword))
 	txFn := func(ctx context.Context) error {
@@ -670,7 +678,7 @@ func testRunInTxRuntimePanicMySQL(ctx context.Context, db *DB, t *testing.T) {
 }
 
 func testRunInTxManualPanicMySQL(ctx context.Context, db *DB, t *testing.T) {
-	t.Helper()
+	// t.Helper()
 
 	s := newSession("tx-manual-panic", newUser("tx-manual-panic@example.com", testPassword))
 	txFn := func(ctx context.Context) error {
@@ -711,7 +719,7 @@ func testRunInTxManualPanicMySQL(ctx context.Context, db *DB, t *testing.T) {
 }
 
 func testRunInTxNestMySQL(ctx context.Context, db *DB, t *testing.T) {
-	t.Helper()
+	// t.Helper()
 
 	s := newSession("tx-nest", newUser("tx-nest@example.com", testPassword))
 	txFn := func(ctx context.Context) error {

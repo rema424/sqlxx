@@ -28,6 +28,12 @@ const (
 	DefaultSlowDuration = 150 * time.Millisecond
 	DefaultWarnRows     = 1000
 	DefaultHideParams   = false
+
+	CmdGet       = "GET"
+	CmdSelect    = "SELECT"
+	CmdQuery     = "QUERY"
+	CmdExec      = "EXEC"
+	CmdNamedExec = "N-EXEC"
 )
 
 type Option struct {
@@ -84,7 +90,8 @@ func newTxCtx(ctx context.Context, tx *sqlx.Tx) context.Context {
 func (db *DB) Query(ctx context.Context, query string, args ...interface{}) (*sqlx.Rows, error) {
 	start := time.Now()
 	rows, err := db.build(ctx).QueryxContext(ctx, query, args...)
-	db.log(ctx, query, args, err, 0, time.Since(start))
+	clone := *rows
+	db.log(ctx, CmdQuery, query, args, err, countRows(&clone), time.Since(start))
 	return rows, err
 }
 
@@ -95,21 +102,21 @@ func (db *DB) Get(ctx context.Context, dest interface{}, query string, args ...i
 	if err != nil {
 		rows = 0
 	}
-	db.log(ctx, query, args, err, rows, time.Since(start))
+	db.log(ctx, CmdGet, query, args, err, rows, time.Since(start))
 	return err
 }
 
 func (db *DB) Select(ctx context.Context, dest interface{}, query string, args ...interface{}) error {
 	start := time.Now()
 	err := db.build(ctx).SelectContext(ctx, dest, query, args...)
-	db.log(ctx, query, args, err, countRows(dest), time.Since(start))
+	db.log(ctx, CmdSelect, query, args, err, countRows(dest), time.Since(start))
 	return err
 }
 
 func (db *DB) Exec(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
 	start := time.Now()
 	res, err := db.build(ctx).ExecContext(ctx, query, args...)
-	db.log(ctx, query, args, err, countRows(res), time.Since(start))
+	db.log(ctx, CmdExec, query, args, err, countRows(res), time.Since(start))
 	return res, err
 }
 
@@ -117,17 +124,17 @@ func (db *DB) NamedExec(ctx context.Context, query string, arg interface{}) (sql
 	start := time.Now()
 	res, err := db.build(ctx).NamedExecContext(ctx, query, arg)
 	_, args, _ := sqlx.BindNamed(sqlx.NAMED, query, arg)
-	db.log(ctx, query, args, err, countRows(res), time.Since(start))
+	db.log(ctx, CmdNamedExec, query, args, err, countRows(res), time.Since(start))
 	return res, err
 }
 
-func (db *DB) log(ctx context.Context, query string, args []interface{}, err error, rows int, d time.Duration) {
+func (db *DB) log(ctx context.Context, cmd string, query string, args []interface{}, err error, rows int, d time.Duration) {
 	if db.logger == nil {
 		return
 	}
 
 	fn := db.loggerFunc(err, rows, d)
-	msg := db.makeLogMsg(query, args, rows, err, d)
+	msg := db.makeLogMsg(cmd, query, args, rows, err, d)
 
 	fn(ctx, msg)
 }
@@ -148,9 +155,11 @@ func (db *DB) loggerFunc(err error, rows int, d time.Duration) loggerFunc {
 	return db.logger.Debugf
 }
 
-func (db *DB) makeLogMsg(query string, args []interface{}, rows int, err error, elapsed time.Duration) string {
+func (db *DB) makeLogMsg(cmd string, query string, args []interface{}, rows int, err error, elapsed time.Duration) string {
 	var b strings.Builder
 	b.Grow(1024)
+
+	b.WriteString("[" + cmd + "] ")
 
 	if err != nil && err != sql.ErrNoRows {
 		b.WriteString(err.Error())
