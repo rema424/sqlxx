@@ -261,7 +261,7 @@ func (fd *fakeDB) CreateSession(ctx context.Context, s Session) (Session, error)
 }
 
 func (fd *fakeDB) GetUserByID(ctx context.Context, id int64) (User, error) {
-	return fd.GetUserByID(ctx, id)
+	return fd.FakeGetUserByID(ctx, id)
 }
 
 func (fd *fakeDB) GetSessionByID(ctx context.Context, id string) (Session, error) {
