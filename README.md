@@ -98,8 +98,8 @@ func NewInteractor(repo Repository) *Interactor {
 	return &Interactor{repo}
 }
 
-func (it *Interactor) Signup(ctx context.Context, email, passwordRow string) (Session, error) {
-	u := NewUser(email, passwordRow)
+func (it *Interactor) Signup(ctx context.Context, email, passwordRaw string) (Session, error) {
+	u := NewUser(email, passwordRaw)
 	s := NewSession(u)
 
 	txFn := func(ctx context.Context) error {
@@ -190,8 +190,8 @@ func NewSession(u User) Session {
 	}
 }
 
-func NewUser(email, passwordRow string) User {
-	b, _ := bcrypt.GenerateFromPassword([]byte(passwordRow), bcrypt.DefaultCost)
+func NewUser(email, passwordRaw string) User {
+	b, _ := bcrypt.GenerateFromPassword([]byte(passwordRaw), bcrypt.DefaultCost)
 	return User{
 		Email:    email,
 		Password: string(b),
