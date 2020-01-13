@@ -19,13 +19,13 @@ var (
 type DB struct {
 	dbx          *sqlx.DB
 	logger       Logger
-	slowDuration time.Duration
+	warnDuration time.Duration
 	warnRows     int
 	hideParams   bool
 }
 
 const (
-	DefaultSlowDuration = 150 * time.Millisecond
+	DefaultWarnDuration = 150 * time.Millisecond
 	DefaultWarnRows     = 1000
 	DefaultHideParams   = false
 
@@ -37,29 +37,29 @@ const (
 )
 
 type Option struct {
-	SlowDuration time.Duration
+	WarnDuration time.Duration
 	WarnRows     int
 	HideParams   bool
 }
 
 func New(db *sqlx.DB, l Logger, opts *Option) *DB {
 	var (
-		slowDuration time.Duration
+		warnDuration time.Duration
 		warnRows     int
 		hideParams   bool
 	)
 
 	if opts != nil {
-		slowDuration = opts.SlowDuration
+		warnDuration = opts.WarnDuration
 		warnRows = opts.WarnRows
 		hideParams = opts.HideParams
 	} else {
-		slowDuration = DefaultSlowDuration
+		warnDuration = DefaultWarnDuration
 		warnRows = DefaultWarnRows
 		hideParams = DefaultHideParams
 	}
 
-	return &DB{db, l, slowDuration, warnRows, hideParams}
+	return &DB{db, l, warnDuration, warnRows, hideParams}
 }
 
 type ctxKey string
@@ -90,9 +90,6 @@ func newTxCtx(ctx context.Context, tx *sqlx.Tx) context.Context {
 func (db *DB) Query(ctx context.Context, query string, args ...interface{}) (*sqlx.Rows, error) {
 	start := time.Now()
 	rows, err := db.build(ctx).QueryxContext(ctx, query, args...)
-	if err != nil {
-		defer rows.Close()
-	}
 	clone := *rows
 	db.log(ctx, CmdQuery, query, args, err, countRows(&clone), time.Since(start))
 	return rows, err
@@ -151,7 +148,7 @@ func (db *DB) loggerFunc(err error, rows int, d time.Duration) loggerFunc {
 		return db.logger.Warnf
 	} else if rows > db.warnRows {
 		return db.logger.Warnf
-	} else if d > db.slowDuration {
+	} else if d > db.warnDuration {
 		return db.logger.Warnf
 	}
 

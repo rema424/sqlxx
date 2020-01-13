@@ -148,7 +148,7 @@ func TestNew(t *testing.T) {
 		wantR int
 		wantP bool
 	}{
-		{nil, nil, DefaultSlowDuration, DefaultWarnRows, DefaultHideParams},
+		{nil, nil, DefaultWarnDuration, DefaultWarnRows, DefaultHideParams},
 		{nil, &Option{}, 0, 0, false},
 		{NewLogger(ioutil.Discard), &Option{50 * time.Millisecond, 200, true}, 50 * time.Millisecond, 200, true},
 	}
@@ -159,8 +159,8 @@ func TestNew(t *testing.T) {
 		if err := db.dbx.Ping(); err != nil {
 			t.Fatalf("[#%d] failed to Connect: %v", i, err)
 		}
-		if got, want := db.slowDuration, tt.wantD; got != want {
-			t.Errorf("[#%d] wrong slowDuration: got %v, want %v", i, got, want)
+		if got, want := db.warnDuration, tt.wantD; got != want {
+			t.Errorf("[#%d] wrong warnDuration: got %v, want %v", i, got, want)
 		}
 		if got, want := db.warnRows, tt.wantR; got != want {
 			t.Errorf("[#%d] wrong warnRows: got %v, want %v", i, got, want)
@@ -243,7 +243,7 @@ func TestLog(t *testing.T) {
 	var buf bytes.Buffer
 
 	db := &DB{
-		slowDuration: DefaultSlowDuration,
+		warnDuration: DefaultWarnDuration,
 		warnRows:     DefaultWarnRows,
 		hideParams:   DefaultHideParams,
 		logger:       NewLogger(&buf),
@@ -281,7 +281,7 @@ func TestLogNilLogger(t *testing.T) {
 func TestLoggerFunc(t *testing.T) {
 	tests := []struct {
 		name         string
-		slowDuration time.Duration
+		warnDuration time.Duration
 		warnRows     int
 		d            time.Duration
 		rows         int
@@ -331,7 +331,7 @@ func TestLoggerFunc(t *testing.T) {
 
 			var buf bytes.Buffer
 			db := &DB{
-				slowDuration: tt.slowDuration,
+				warnDuration: tt.warnDuration,
 				warnRows:     tt.warnRows,
 				logger:       NewLogger(&buf),
 			}
@@ -350,7 +350,7 @@ func TestLoggerFunc(t *testing.T) {
 
 func TestLoggerFuncNilLogger(t *testing.T) {
 	db := &DB{logger: nil}
-	fn := db.loggerFunc(nil, DefaultWarnRows, DefaultSlowDuration)
+	fn := db.loggerFunc(nil, DefaultWarnRows, DefaultWarnDuration)
 	if fn != nil {
 		t.Errorf("want nil")
 	}
@@ -541,6 +541,8 @@ func testQueryMySQL(ctx context.Context, db *DB, t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer rows.Close()
+
 	if rows.Next() {
 		var u User
 		err := rows.StructScan(&u)
