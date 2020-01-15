@@ -763,6 +763,34 @@ func testRunInTxNestMySQL(ctx context.Context, db *DB, t *testing.T) {
 	}
 }
 
+func TestIsInTx(t *testing.T) {
+	tx, err := dbx.Beginx()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Commit()
+
+	ctx := context.Background()
+
+	tests := []struct {
+		ctx  context.Context
+		want bool
+	}{
+		{ctx, false},
+		{newTxCtx(ctx, nil), false},
+		{newTxCtx(ctx, (*sqlx.Tx)(nil)), false},
+		{newTxCtx(ctx, tx), true},
+	}
+
+	for i, tt := range tests {
+		got := IsInTx(tt.ctx)
+
+		if got != tt.want {
+			t.Errorf("%d: want %t, got %t", i, tt.want, got)
+		}
+	}
+}
+
 // func isMysqlErrDupEntry(err error) bool {
 // 	if driverErr, ok := err.(*mysql.MySQLError); ok {
 // 		return driverErr.Number == mysqlerr.ER_DUP_ENTRY // 1062

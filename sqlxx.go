@@ -221,3 +221,8 @@ func (db *DB) RunInTx(ctx context.Context, txFn TxFunc) (err, rbErr error) {
 	err = txFn(newTxCtx(ctx, tx))
 	return
 }
+
+func IsInTx(ctx context.Context) bool {
+	tx, ok := ctx.Value(txCtxKey).(*sqlx.Tx)
+	return ok && tx != nil
+}
