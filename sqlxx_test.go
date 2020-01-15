@@ -768,7 +768,9 @@ func TestIsInTx(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer tx.Commit()
+	defer func() {
+		_ = tx.Commit()
+	}()
 
 	ctx := context.Background()
 
