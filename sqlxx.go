@@ -11,11 +11,6 @@ import (
 	"golang.org/x/xerrors"
 )
 
-var (
-	ErrNestedTransaction = xerrors.New("sqlxx: nested transaction")
-	ErrNoLogger          = xerrors.New("sqlxx: no logger")
-)
-
 type DB struct {
 	dbx          *sqlx.DB
 	logger       Logger
@@ -192,17 +187,14 @@ func (db *DB) clone() *DB {
 type TxFunc func(context.Context) error
 
 func (db *DB) RunInTx(ctx context.Context, txFn TxFunc) (err, rbErr error) {
-	var tx *sqlx.Tx
-	switch q := db.build(ctx).(type) {
-	case *sqlx.DB:
-		tx, err = q.Beginx()
-		if err != nil {
-			return err, nil
-		}
-	case *sqlx.Tx:
-		return ErrNestedTransaction, nil
+	if IsInTx(ctx) {
+		return txFn(ctx), nil
 	}
 
+	tx, err := db.dbx.Beginx()
+	if err != nil {
+		return err, nil
+	}
 	defer func() {
 		if pnc := recover(); pnc != nil {
 			rbErr = tx.Rollback()

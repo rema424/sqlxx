@@ -452,7 +452,9 @@ func TestMySQL(t *testing.T) {
 	testRunInTxErrorMySQL(ctx, db, t)
 	testRunInTxRuntimePanicMySQL(ctx, db, t)
 	testRunInTxManualPanicMySQL(ctx, db, t)
-	testRunInTxNestMySQL(ctx, db, t)
+	testRunInTxNestMySQLCommit(ctx, db, t)
+	testRunInTxNestMySQLRollback(ctx, db, t)
+	testRunInTxNestMySQLPanic(ctx, db, t)
 }
 
 func testExecMySQL(ctx context.Context, db *DB, t *testing.T) {
@@ -720,45 +722,145 @@ func testRunInTxManualPanicMySQL(ctx context.Context, db *DB, t *testing.T) {
 	}
 }
 
-func testRunInTxNestMySQL(ctx context.Context, db *DB, t *testing.T) {
+func testRunInTxNestMySQLCommit(ctx context.Context, db *DB, t *testing.T) {
 	// t.Helper()
 
-	s := newSession("tx-nest", newUser("tx-nest@example.com", testPassword))
-	txFn := func(ctx context.Context) error {
-		txFn := func(ctx context.Context) error {
+	var (
+		email1 = "tx-nest-commit-1@example.com"
+	)
+
+	s := newSession("tx-nest-commit", newUser(email1, testPassword))
+	err, rbErr := db.RunInTx(ctx, func(ctx context.Context) error {
+		err, _ := db.RunInTx(ctx, func(ctx context.Context) error {
 			var err error
 			s, err = createUser(ctx, db, s) // success
 			if err != nil {
 				return err
 			}
 			s, err = createSession(ctx, db, s) // success
-			return err
-		}
-		err, _ := db.RunInTx(ctx, txFn) // nest
-		return err
+			return err                         // nested, so not commit
+		})
+		return err // nil, so commit
+	})
+
+	if rbErr != nil {
+		t.Fatal(err)
+	}
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	err, rbErr := db.RunInTx(ctx, txFn)
+	_, err = getUserByEmail(ctx, db, email1)
+	if err != nil {
+		t.Fatal("want non-nil error")
+	}
+
+	_, err = getSessionByID(ctx, db, s.ID)
+	if err != nil {
+		t.Fatal("want non-nil error")
+	}
+}
+
+func testRunInTxNestMySQLRollback(ctx context.Context, db *DB, t *testing.T) {
+	// t.Helper()
+
+	var (
+		email1 = "tx-nest-rollback-1@example.com"
+		email2 = "tx-nest-rollback-2@example.com"
+	)
+
+	s := newSession("tx-nest-rollback", newUser(email1, testPassword))
+	err, rbErr := db.RunInTx(ctx, func(ctx context.Context) error {
+		err, _ := db.RunInTx(ctx, func(ctx context.Context) error {
+			var err error
+			s, err = createUser(ctx, db, s) // success
+			if err != nil {
+				return err
+			}
+			s, err = createSession(ctx, db, s) // success
+			return err                         // nested, so not commit
+		})
+		if err != nil {
+			return err
+		}
+
+		s.User.Email = email2
+		err, _ = db.RunInTx(ctx, func(ctx context.Context) error {
+			var err error
+			s, err = createUser(ctx, db, s) // success
+			if err != nil {
+				return err
+			}
+			s, err = createSession(ctx, db, s) // duplicate error
+			return err                         // nested, so not rollback
+		})
+
+		return err // non-nil error, so rollback
+	})
+
 	if rbErr != nil {
 		t.Fatal(err)
 	}
 	if err == nil {
 		t.Fatal("want non-nil error")
-	} else if err != ErrNestedTransaction {
-		t.Fatal("want nested transaction error")
 	}
 
-	_, err = getUserByEmail(ctx, db, s.User.Email)
-	if err == nil {
-		t.Fatal("want non-nil error")
-	} else if err != sql.ErrNoRows {
+	_, err = getUserByEmail(ctx, db, email1)
+	if err != sql.ErrNoRows {
+		t.Fatal("want sql.ErrNoRows")
+	}
+
+	_, err = getUserByEmail(ctx, db, email2)
+	if err != sql.ErrNoRows {
 		t.Fatal("want sql.ErrNoRows")
 	}
 
 	_, err = getSessionByID(ctx, db, s.ID)
+	if err != sql.ErrNoRows {
+		t.Fatal("want sql.ErrNoRows")
+	}
+}
+
+func testRunInTxNestMySQLPanic(ctx context.Context, db *DB, t *testing.T) {
+	// t.Helper()
+
+	var (
+		email1 = "tx-nest-panic-1@example.com"
+		pnc    = "panic, plz rollback"
+	)
+
+	s := newSession("tx-nest-panic", newUser(email1, testPassword))
+	err, rbErr := db.RunInTx(ctx, func(ctx context.Context) error {
+		_, _ = db.RunInTx(ctx, func(ctx context.Context) error {
+			var err error
+			s, err = createUser(ctx, db, s) // success
+			if err != nil {
+				return err
+			}
+			s, err = createSession(ctx, db, s) // success
+			return err                         // nested, so not commit
+		})
+
+		panic(pnc)
+	})
+
+	if rbErr != nil {
+		t.Fatal(err)
+	}
 	if err == nil {
 		t.Fatal("want non-nil error")
-	} else if err != sql.ErrNoRows {
+	} else if got, want := err.Error(), pnc; !strings.Contains(got, want) {
+		t.Log(err)
+		t.Fatalf("want %s, got %s", pnc, err.Error())
+	}
+
+	_, err = getUserByEmail(ctx, db, email1)
+	if err != sql.ErrNoRows {
+		t.Fatal("want sql.ErrNoRows")
+	}
+
+	_, err = getSessionByID(ctx, db, s.ID)
+	if err != sql.ErrNoRows {
 		t.Fatal("want sql.ErrNoRows")
 	}
 }
