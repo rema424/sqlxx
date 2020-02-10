@@ -1,6 +1,7 @@
 # sqlxx
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/rema424/sqlxx)](https://goreportcard.com/report/github.com/rema424/sqlxx)
+[![codebeat badge](https://codebeat.co/badges/9c1ae3a7-2945-4ec9-823c-f0a13e401a6b)](https://codebeat.co/projects/github-com-rema424-sqlxx-master)
 [![Coverage Status](https://coveralls.io/repos/github/rema424/sqlxx/badge.svg?branch=master)](https://coveralls.io/github/rema424/sqlxx?branch=master)
 [![Build Status](https://travis-ci.org/rema424/sqlxx.svg?branch=master)](https://travis-ci.org/rema424/sqlxx)
 [![GoDoc](https://godoc.org/github.com/rema424/sqlxx?status.svg)](https://godoc.org/github.com/rema424/sqlxx)
